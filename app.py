@@ -5,12 +5,20 @@ import os
 from PIL import Image
 from datetime import datetime
 
+# # --- 1. KONFIGURASI API & MODEL ---
+# # Pastikan GEMINI_API_KEY sudah diset di Streamlit Cloud Secrets
+# try:
+#     genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
+#     # Menggunakan nama model standar yang paling kompatibel
+#     model = genai.GenerativeModel('gemini-1.5-flash')
+# except Exception as e:
+#     st.error(f"Gagal konfigurasi API: {e}")
+
 # --- 1. KONFIGURASI API & MODEL ---
-# Pastikan GEMINI_API_KEY sudah diset di Streamlit Cloud Secrets
 try:
     genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-    # Menggunakan nama model standar yang paling kompatibel
-    model = genai.GenerativeModel('gemini-1.5-flash')
+    # Menggunakan model 'gemini-1.5-flash-latest' seringkali memecahkan masalah 404 pada v1beta
+    model = genai.GenerativeModel('gemini-1.5-flash-latest')
 except Exception as e:
     st.error(f"Gagal konfigurasi API: {e}")
 
