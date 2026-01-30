@@ -1,110 +1,90 @@
 import streamlit as st
 import google.generativeai as genai
 import json
-import os
 from PIL import Image
 from datetime import datetime
 
-# # --- 1. KONFIGURASI API & MODEL ---
-# # Pastikan GEMINI_API_KEY sudah diset di Streamlit Cloud Secrets
-# try:
-#     genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-#     # Menggunakan nama model standar yang paling kompatibel
-#     model = genai.GenerativeModel('gemini-1.5-flash')
-# except Exception as e:
-#     st.error(f"Gagal konfigurasi API: {e}")
-
-# --- 1. KONFIGURASI API & MODEL ---
+# --- 1. KONFIGURASI API ---
 try:
     genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-    # Menggunakan model 'gemini-1.5-flash-latest' seringkali memecahkan masalah 404 pada v1beta
-    model = genai.GenerativeModel('gemini-3-flash-preview')
+    model = genai.GenerativeModel('gemini-1.5-flash-latest')
 except Exception as e:
     st.error(f"Gagal konfigurasi API: {e}")
 
-# --- 2. FUNGSI MEMORI (DATABASE) ---
-def load_memory():
-    if os.path.exists("journal.json"):
-        try:
-            with open("journal.json", "r") as f:
-                return json.load(f)
-        except:
-            return []
-    return []
-
-def save_memory(data):
-    with open("journal.json", "w") as f:
-        json.dump(data, f)
+# --- 2. LOGIKA MEMORI (Session State) ---
+# Menggunakan session_state agar data bertahan selama browser tidak di-refresh
+if "journal_memory" not in st.session_state:
+    st.session_state.journal_memory = []
 
 # --- 3. UI APLIKASI ---
 st.set_page_config(page_title="Wyckoff Brain MVP", layout="wide")
-st.title("🧠 Wyckoff Brain: Self-Improving Analyst")
-
-# Load data lama
-memory = load_memory()
-last_analysis = memory[-1]["analysis"] if memory else "Belum ada analisa sebelumnya (D-0)."
+st.title("🧠 Wyckoff Brain: Permanent Journal")
 
 with st.sidebar:
     st.header("⚙️ Portofolio & Modal")
-    equity = st.number_input("Total Modal (Rp)", value=9500000, step=50000)
-    st.info(f"Analisa terakhir tersimpan: {len(memory)} entri")
+    equity = st.number_input("Total Modal (Rp)", value=9500000)
+    
+    st.divider()
+    st.subheader("💾 Backup Data")
+    if st.session_state.journal_memory:
+        # Fitur download agar user bisa simpan ke Excel/JSON lokal
+        json_data = json.dumps(st.session_state.journal_memory, indent=4)
+        st.download_button(
+            label="Download Semua Jurnal (JSON)",
+            data=json_data,
+            file_name=f"trading_journal_{datetime.now().strftime('%Y%m%d')}.json",
+            mime="application/json"
+        )
 
 st.subheader("📁 Input Analisa Hari Ini")
-uploaded_file = st.file_uploader("Upload Screenshot Chart (Daily)", type=["png", "jpg", "jpeg"])
+uploaded_file = st.file_uploader("Upload Screenshot Chart", type=["png", "jpg", "jpeg"])
 
 if uploaded_file:
     img = Image.open(uploaded_file)
     st.image(img, caption="Chart Saham Terkini", use_container_width=True)
 
     if st.button("🚀 Jalankan Analisa & Self-Improvement"):
-        # TEMPLATE PROMPT (OTAK)
+        # Mengambil analisa terakhir dari session state
+        last_analisa = st.session_state.journal_memory[-1]['analysis'] if st.session_state.journal_memory else "Tidak ada data sebelumnya."
+        
         prompt = f"""
-        Peran: Ahli Swing Trader Pasar Saham Indonesia & Wyckoff Strategist (>10 thn exp).
-        Disiplin: Sangat Konservatif, Manajemen Risiko Ketat.
-
-        TUGAS 1 (EVALUASI SELF-IMPROVEMENT): 
-        Bandingkan pergerakan harga pada gambar ini dengan analisa terakhir Anda berikut: 
-        ---
-        {last_analysis}
-        ---
-        Jelaskan kesalahan atau ketepatan analisa tersebut berdasarkan kondisi harga sekarang. 
-        Gunakan ini sebagai pelajaran untuk memperbaiki analisa hari ini.
-
-        TUGAS 2 (ANALISA TRADING PLAN BARU):
-        Identifikasi Fase Wyckoff (Accumulation, Markup, Distribution, atau Markdown).
-        Buat rencana trading dengan aturan WAJIB:
-        1. Format: Satu tabel vertikal (Parameter | Nilai/Keterangan).
-        2. Perhitungan Grup 2: Gunakan harga BATAS ATAS dari Range Entry sebagai dasar.
-        3. Risk Reward Ratio (RRR): WAJIB Minimal 1:2. Sesuaikan Entry atau SL agar tercapai.
-        4. Komponen Tabel: 
-           - GRUP 1: Fase Wyckoff, Trend, Range Entry, TP1, SL, Konfirmasi Entry.
-           - GRUP 2: Alokasi Dana, Harga Entri (Worst Case), Jumlah Lot, Potensi Rugi Rp, Potensi Profit Rp, RRR.
-           - GRUP 3: Law of Effort vs Result (Volume), Pemicu Batalkan Ide.
-
-        Kondisi Modal Aktual: Rp {equity}
+        Peran: Ahli Swing Trader Indonesia & Wyckoff Strategist.
+        
+        TUGAS 1 (EVALUASI):
+        Bandingkan chart ini dengan analisa terakhir:
+        {last_analisa}
+        
+        TUGAS 2 (ANALISA BARU):
+        Buat trading plan Wyckoff dalam tabel vertikal.
+        Aturan: RRR minimal 1:2, gunakan Batas Atas Range Entry untuk Grup 2.
+        Modal: Rp {equity}
         """
 
-        with st.spinner("Otak sedang memproses data dan memori..."):
+        with st.spinner("Otak sedang memproses..."):
             try:
-                # Memanggil API Gemini
                 response = model.generate_content([prompt, img])
+                output_text = response.text
                 
-                if response.text:
-                    output_text = response.text
-                    st.markdown("### 📊 Hasil Analisa Otak")
-                    st.markdown(output_text)
-                    
-                    # Simpan hasil ke journal.json
-                    new_entry = {
-                        "date": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                        "analysis": output_text
-                    }
-                    memory.append(new_entry)
-                    save_memory(memory)
-                    st.success("✅ Berhasil! Analisa disimpan untuk pembelajaran besok.")
-                else:
-                    st.error("Gagal menerima teks dari AI. Silakan coba lagi.")
-
+                # Simpan ke Session State
+                new_entry = {
+                    "date": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                    "analysis": output_text
+                }
+                st.session_state.journal_memory.append(new_entry)
+                
+                st.markdown("### 📊 Hasil Analisa Otak")
+                st.markdown(output_text)
+                st.success("✅ Analisa berhasil dibuat dan disimpan di memori sesi!")
+                
             except Exception as e:
-                st.error(f"⚠️ Error API: {str(e)}")
-                st.info("Saran: Cek apakah API Key di Secrets sudah benar dan model 'gemini-1.5-flash' tersedia di akun Anda.")
+                st.error(f"Error: {e}")
+
+# --- 4. TAMPILKAN RIWAYAT JURNAL ---
+st.divider()
+st.subheader("📜 Riwayat Jurnal (Sesi Ini)")
+if st.session_state.journal_memory:
+    for i, m in enumerate(reversed(st.session_state.journal_memory)):
+        with st.expander(f"Analisa {m['date']}"):
+            st.markdown(m['analysis'])
+else:
+    st.info("Belum ada riwayat analisa. Silakan upload chart untuk memulai.")
