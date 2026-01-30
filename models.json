@@ -1,6 +1,4 @@
-[
-    "gemini-1.5-flash",
-    "gemini-1.5-pro",
-    "gemini-1.5-flash-latest",
-    "gemini-3-flash-preview"
-]
+{
+    "Gemini": ["gemini-3-flash-preview", "gemini-1.5-flash", "gemini-1.5-pro"],
+    "Deepseek": ["deepseek-chat", "deepseek-coder"]
+}
