@@ -19,7 +19,7 @@ if "journal_memory" not in st.session_state:
     st.session_state.journal_memory = []
 
 # Load data model dan prompt
-model_options = load_json_file("models.json", ["gemini-1.5-flash"])
+model_options = load_json_file("models.json", ["gemini-3-flash-preview"])
 prompt_options = load_json_file("prompts.json", {"Default": "Buat analisa Wyckoff dari {equity}."})
 
 # --- 3. SIDEBAR (KONTROL MODULAR) ---
