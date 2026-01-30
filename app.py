@@ -3,70 +3,100 @@ import google.generativeai as genai
 import json
 import os
 from PIL import Image
+from datetime import datetime
 
-# --- KONFIGURASI API ---
-# Ambil API Key dari Streamlit Secrets
-genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-model = genai.GenerativeModel('gemini-1.5-flash')
+# --- 1. KONFIGURASI API & MODEL ---
+# Pastikan GEMINI_API_KEY sudah diset di Streamlit Cloud Secrets
+try:
+    genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
+    # Menggunakan nama model standar yang paling kompatibel
+    model = genai.GenerativeModel('gemini-1.5-flash')
+except Exception as e:
+    st.error(f"Gagal konfigurasi API: {e}")
 
-# --- LOGIKA MEMORI ---
+# --- 2. FUNGSI MEMORI (DATABASE) ---
 def load_memory():
     if os.path.exists("journal.json"):
-        with open("journal.json", "r") as f:
-            return json.load(f)
+        try:
+            with open("journal.json", "r") as f:
+                return json.load(f)
+        except:
+            return []
     return []
 
 def save_memory(data):
     with open("journal.json", "w") as f:
         json.dump(data, f)
 
-# --- UI APP ---
+# --- 3. UI APLIKASI ---
 st.set_page_config(page_title="Wyckoff Brain MVP", layout="wide")
 st.title("🧠 Wyckoff Brain: Self-Improving Analyst")
 
+# Load data lama
 memory = load_memory()
-last_analysis = memory[-1]["analysis"] if memory else "Belum ada analisa sebelumnya."
+last_analysis = memory[-1]["analysis"] if memory else "Belum ada analisa sebelumnya (D-0)."
 
 with st.sidebar:
-    st.header("Konfigurasi Portofolio")
-    equity = st.number_input("Total Modal (Rp)", value=9500000)
-    cash = st.number_input("Sisa Cash (Rp)", value=9500000)
-    
-st.subheader("Analisa Hari Ini (D+n)")
-uploaded_file = st.file_uploader("Upload Screenshot Chart", type=["png", "jpg", "jpeg"])
+    st.header("⚙️ Portofolio & Modal")
+    equity = st.number_input("Total Modal (Rp)", value=9500000, step=50000)
+    st.info(f"Analisa terakhir tersimpan: {len(memory)} entri")
+
+st.subheader("📁 Input Analisa Hari Ini")
+uploaded_file = st.file_uploader("Upload Screenshot Chart (Daily)", type=["png", "jpg", "jpeg"])
 
 if uploaded_file:
     img = Image.open(uploaded_file)
-    st.image(img, caption="Chart Terkini", use_container_width=True)
+    st.image(img, caption="Chart Saham Terkini", use_container_width=True)
 
-    if st.button("Jalankan Analisa & Self-Improvement"):
-        # PROMPT OTAK
+    if st.button("🚀 Jalankan Analisa & Self-Improvement"):
+        # TEMPLATE PROMPT (OTAK)
         prompt = f"""
-        Peran: Ahli Swing Trader Indonesia & Wyckoff Strategist (>10 thn exp).
-        
-        TUGAS 1 (EVALUASI): 
-        Bandingkan chart ini dengan analisa terakhir berikut: {last_analysis}. 
-        Jelaskan apa yang benar/salah dari analisa tersebut untuk perbaikan hari ini.
+        Peran: Ahli Swing Trader Pasar Saham Indonesia & Wyckoff Strategist (>10 thn exp).
+        Disiplin: Sangat Konservatif, Manajemen Risiko Ketat.
 
-        TUGAS 2 (ANALISA BARU):
-        Berikan trading plan baru sesuai aturan:
-        1. Format: Tabel vertikal (Parameter | Nilai).
-        2. Gunakan Batas Atas Range Entry sebagai dasar hitung di Grup 2.
-        3. RRR WAJIB MINIMAL 1:2 (Sesuaikan Entry/SL jika perlu).
-        4. Grup 1: Strategi (Fase Wyckoff, Range Entry, TP1, TP2, SL, Konfirmasi).
-        5. Grup 2: Manajemen Risiko (Alokasi Dana, Lot, Potensi Rugi/Profit Net Fee).
-        
-        Kondisi Modal: Rp {equity}
+        TUGAS 1 (EVALUASI SELF-IMPROVEMENT): 
+        Bandingkan pergerakan harga pada gambar ini dengan analisa terakhir Anda berikut: 
+        ---
+        {last_analysis}
+        ---
+        Jelaskan kesalahan atau ketepatan analisa tersebut berdasarkan kondisi harga sekarang. 
+        Gunakan ini sebagai pelajaran untuk memperbaiki analisa hari ini.
+
+        TUGAS 2 (ANALISA TRADING PLAN BARU):
+        Identifikasi Fase Wyckoff (Accumulation, Markup, Distribution, atau Markdown).
+        Buat rencana trading dengan aturan WAJIB:
+        1. Format: Satu tabel vertikal (Parameter | Nilai/Keterangan).
+        2. Perhitungan Grup 2: Gunakan harga BATAS ATAS dari Range Entry sebagai dasar.
+        3. Risk Reward Ratio (RRR): WAJIB Minimal 1:2. Sesuaikan Entry atau SL agar tercapai.
+        4. Komponen Tabel: 
+           - GRUP 1: Fase Wyckoff, Trend, Range Entry, TP1, SL, Konfirmasi Entry.
+           - GRUP 2: Alokasi Dana, Harga Entri (Worst Case), Jumlah Lot, Potensi Rugi Rp, Potensi Profit Rp, RRR.
+           - GRUP 3: Law of Effort vs Result (Volume), Pemicu Batalkan Ide.
+
+        Kondisi Modal Aktual: Rp {equity}
         """
 
-        with st.spinner("Otak sedang berpikir..."):
-            response = model.generate_content([prompt, img])
-            output_text = response.text
-            
-            st.markdown("### Hasil Analisa Otak")
-            st.markdown(output_text)
-            
-            # Simpan ke memori
-            memory.append({"date": str(st.session_state.get('date')), "analysis": output_text})
-            save_memory(memory)
-            st.success("Analisa disimpan ke memori untuk perbaikan besok!")
+        with st.spinner("Otak sedang memproses data dan memori..."):
+            try:
+                # Memanggil API Gemini
+                response = model.generate_content([prompt, img])
+                
+                if response.text:
+                    output_text = response.text
+                    st.markdown("### 📊 Hasil Analisa Otak")
+                    st.markdown(output_text)
+                    
+                    # Simpan hasil ke journal.json
+                    new_entry = {
+                        "date": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                        "analysis": output_text
+                    }
+                    memory.append(new_entry)
+                    save_memory(memory)
+                    st.success("✅ Berhasil! Analisa disimpan untuk pembelajaran besok.")
+                else:
+                    st.error("Gagal menerima teks dari AI. Silakan coba lagi.")
+
+            except Exception as e:
+                st.error(f"⚠️ Error API: {str(e)}")
+                st.info("Saran: Cek apakah API Key di Secrets sudah benar dan model 'gemini-1.5-flash' tersedia di akun Anda.")
