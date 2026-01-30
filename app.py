@@ -18,7 +18,7 @@ from datetime import datetime
 try:
     genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
     # Menggunakan model 'gemini-1.5-flash-latest' seringkali memecahkan masalah 404 pada v1beta
-    model = genai.GenerativeModel('gemini-1.5-flash-latest')
+    model = genai.GenerativeModel('gemini-3-flash-preview')
 except Exception as e:
     st.error(f"Gagal konfigurasi API: {e}")
 
