@@ -1,90 +1,99 @@
 import streamlit as st
 import google.generativeai as genai
 import json
+import os
 from PIL import Image
 from datetime import datetime
 
-# --- 1. KONFIGURASI API ---
-try:
-    genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-    model = genai.GenerativeModel('gemini-3-flash-preview')
-except Exception as e:
-    st.error(f"Gagal konfigurasi API: {e}")
+# --- 1. FUNGSI PEMBACA FILE EKSTERNAL ---
+def load_json_file(file_path, default_value):
+    if os.path.exists(file_path):
+        with open(file_path, "r") as f:
+            return json.load(f)
+    return default_value
 
-# --- 2. LOGIKA MEMORI (Session State) ---
-# Menggunakan session_state agar data bertahan selama browser tidak di-refresh
+# --- 2. KONFIGURASI UI & SESSION STATE ---
+st.set_page_config(page_title="Wyckoff Modular Brain", layout="wide")
+
 if "journal_memory" not in st.session_state:
     st.session_state.journal_memory = []
 
-# --- 3. UI APLIKASI ---
-st.set_page_config(page_title="Wyckoff Brain MVP", layout="wide")
-st.title("🧠 Wyckoff Brain: Permanent Journal")
+# Load data model dan prompt
+model_options = load_json_file("models.json", ["gemini-1.5-flash"])
+prompt_options = load_json_file("prompts.json", {"Default": "Buat analisa Wyckoff dari {equity}."})
 
+# --- 3. SIDEBAR (KONTROL MODULAR) ---
 with st.sidebar:
-    st.header("⚙️ Portofolio & Modal")
+    st.header("🎮 Control Panel")
+    
+    # Dropdown Pilih Model
+    selected_model_name = st.selectbox("Pilih Model AI:", model_options)
+    
+    # Dropdown Pilih Prompt
+    selected_prompt_key = st.selectbox("Pilih Strategi Prompt:", list(prompt_options.keys()))
+    
+    st.divider()
+    st.header("⚙️ Portofolio")
     equity = st.number_input("Total Modal (Rp)", value=9500000)
     
     st.divider()
-    st.subheader("💾 Backup Data")
     if st.session_state.journal_memory:
-        # Fitur download agar user bisa simpan ke Excel/JSON lokal
         json_data = json.dumps(st.session_state.journal_memory, indent=4)
         st.download_button(
-            label="Download Semua Jurnal (JSON)",
+            label="📥 Download Jurnal (JSON)",
             data=json_data,
-            file_name=f"trading_journal_{datetime.now().strftime('%Y%m%d')}.json",
+            file_name=f"wyckoff_journal_{datetime.now().strftime('%Y%m%d')}.json",
             mime="application/json"
         )
 
-st.subheader("📁 Input Analisa Hari Ini")
+# --- 4. KONFIGURASI API ---
+try:
+    genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
+    model = genai.GenerativeModel(selected_model_name)
+except Exception as e:
+    st.error(f"Gagal inisialisasi Model {selected_model_name}: {e}")
+
+# --- 5. MAIN INTERFACE ---
+st.title("🧠 Wyckoff Brain: Modular Version")
+st.info(f"Model Aktif: **{selected_model_name}** | Strategi: **{selected_prompt_key}**")
+
 uploaded_file = st.file_uploader("Upload Screenshot Chart", type=["png", "jpg", "jpeg"])
 
 if uploaded_file:
     img = Image.open(uploaded_file)
-    st.image(img, caption="Chart Saham Terkini", use_container_width=True)
+    st.image(img, caption="Chart Saham", use_container_width=True)
 
-    if st.button("🚀 Jalankan Analisa & Self-Improvement"):
-        # Mengambil analisa terakhir dari session state
+    if st.button("🚀 Jalankan Analisa"):
         last_analisa = st.session_state.journal_memory[-1]['analysis'] if st.session_state.journal_memory else "Tidak ada data sebelumnya."
         
-        prompt = f"""
-        Peran: Ahli Swing Trader Indonesia & Wyckoff Strategist.
-        
-        TUGAS 1 (EVALUASI):
-        Bandingkan chart ini dengan analisa terakhir:
-        {last_analisa}
-        
-        TUGAS 2 (ANALISA BARU):
-        Buat trading plan Wyckoff dalam tabel vertikal.
-        Aturan: RRR minimal 1:2, gunakan Batas Atas Range Entry untuk Grup 2.
-        Modal: Rp {equity}
-        """
+        # Ambil template prompt dan suntikkan variabel
+        raw_prompt = prompt_options[selected_prompt_key]
+        final_prompt = raw_prompt.format(last_analisa=last_analisa, equity=equity)
 
-        with st.spinner("Otak sedang memproses..."):
+        with st.spinner(f"Otak ({selected_model_name}) sedang berpikir..."):
             try:
-                response = model.generate_content([prompt, img])
+                response = model.generate_content([final_prompt, img])
                 output_text = response.text
                 
-                # Simpan ke Session State
-                new_entry = {
+                # Simpan ke Memori
+                st.session_state.journal_memory.append({
                     "date": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                    "model": selected_model_name,
+                    "strategy": selected_prompt_key,
                     "analysis": output_text
-                }
-                st.session_state.journal_memory.append(new_entry)
+                })
                 
-                st.markdown("### 📊 Hasil Analisa Otak")
+                st.markdown(f"### 📊 Hasil Analisa: {selected_prompt_key}")
                 st.markdown(output_text)
-                st.success("✅ Analisa berhasil dibuat dan disimpan di memori sesi!")
+                st.success("Analisa tersimpan dalam sesi ini!")
                 
             except Exception as e:
-                st.error(f"Error: {e}")
+                st.error(f"Analisa Gagal: {e}")
 
-# --- 4. TAMPILKAN RIWAYAT JURNAL ---
+# --- 6. RIWAYAT ---
 st.divider()
-st.subheader("📜 Riwayat Jurnal (Sesi Ini)")
+st.subheader("📜 Riwayat Analisa")
 if st.session_state.journal_memory:
-    for i, m in enumerate(reversed(st.session_state.journal_memory)):
-        with st.expander(f"Analisa {m['date']}"):
+    for m in reversed(st.session_state.journal_memory):
+        with st.expander(f"{m['date']} | {m['strategy']} ({m['model']})"):
             st.markdown(m['analysis'])
-else:
-    st.info("Belum ada riwayat analisa. Silakan upload chart untuk memulai.")
