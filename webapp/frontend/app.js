@@ -98,6 +98,27 @@
     return "weak";
   }
 
+  function planHtml(plan) {
+    if (!plan) return "";
+    if (plan.verdict === "SETUP") {
+      const rows = [
+        ["Entry", plan.entry_low != null && plan.entry_high != null ? `${plan.entry_low}–${plan.entry_high}` : "—"],
+        ["Stop", plan.stop_loss ?? "—"],
+        ["Target", plan.target ?? "—"],
+        ["RRR", plan.rrr != null ? `1:${plan.rrr}` : "—"],
+        ["Risk", plan.risk_pct != null ? `${plan.risk_pct}%` : "—"],
+      ];
+      return `
+        <div class="plan-stats">
+          <span class="verdict setup">Setup${plan.phase ? " · " + escapeHtml(plan.phase) : ""}</span>
+          <div class="plan-grid mono">
+            ${rows.map(([k, v]) => `<div class="plan-cell"><span>${k}</span><b>${escapeHtml(String(v))}</b></div>`).join("")}
+          </div>
+        </div>`;
+    }
+    return `<div class="plan-stats"><span class="verdict no-setup">No Setup</span></div>`;
+  }
+
   function ticketHtml(c, idx) {
     return `
       <article class="ticket" data-idx="${idx}">
@@ -112,6 +133,7 @@
         <div class="signals">
           ${c.signals.map((s) => `<span class="tag">${escapeHtml(s)}</span>`).join("")}
         </div>
+        ${planHtml(c.plan)}
         <div class="excerpt rendered-md">${c.analysis_html}</div>
         <div class="foot">
           <button class="btn-link" data-action="expand">Read more &rarr;</button>
@@ -246,7 +268,7 @@
       }
       const data = await res.json();
       $("manualResultWrap").style.display = "block";
-      $("manualResult").innerHTML = data.analysis_html;
+      $("manualResult").innerHTML = planHtml(data.plan) + data.analysis_html;
       state.journal = await fetch("/api/journal").then((r) => r.json());
       renderJournal();
     } catch (e) {

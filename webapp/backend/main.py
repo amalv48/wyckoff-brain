@@ -38,6 +38,57 @@ _ALLOWED_MD_TAGS = [
     "blockquote", "code", "pre", "span",
 ]
 
+# Structured trading-plan fields requested alongside the Markdown narrative.
+# Written in standard JSON Schema (nullable fields as a ["type", "null"]
+# union) — providers.call_gemini() adapts this to Gemini's older dialect.
+ANALYSIS_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "verdict": {
+            "type": "string",
+            "enum": ["SETUP", "NO_SETUP"],
+            "description": "SETUP if the strategy's rules produce a valid trade plan, otherwise NO_SETUP.",
+        },
+        "phase": {
+            "type": "string",
+            "description": "Short Wyckoff phase / structure label, e.g. 'Phase C - Spring'. Empty string if NO_SETUP.",
+        },
+        "entry_low": {"type": ["number", "null"], "description": "Lower bound of the entry price range."},
+        "entry_high": {"type": ["number", "null"], "description": "Upper bound of the entry price range."},
+        "stop_loss": {"type": ["number", "null"]},
+        "target": {"type": ["number", "null"]},
+        "rrr": {"type": ["number", "null"], "description": "Reward-to-risk ratio, e.g. 2.5 for 1:2.5."},
+        "risk_pct": {"type": ["number", "null"], "description": "Position risk as a percent of equity, e.g. 1.5."},
+        "narrative_markdown": {
+            "type": "string",
+            "description": "The full analysis written as Markdown, same content/tone/language as before.",
+        },
+    },
+    "required": [
+        "verdict", "phase", "entry_low", "entry_high", "stop_loss",
+        "target", "rrr", "risk_pct", "narrative_markdown",
+    ],
+    "additionalProperties": False,
+}
+
+
+def call_structured(provider, model_id, prompt, image=None):
+    """Call the model with ANALYSIS_SCHEMA and return (narrative_text, plan_dict).
+    Falls back to a plain narrative-only call (plan=None) if structured output
+    fails or the model returns something unparseable, so a schema hiccup never
+    breaks the existing Markdown-only experience."""
+    raw = providers.call_model(provider, model_id, prompt, image=image, response_schema=ANALYSIS_SCHEMA)
+    try:
+        parsed = json.loads(raw)
+        narrative = parsed.get("narrative_markdown") or raw
+        plan = {k: parsed.get(k) for k in (
+            "verdict", "phase", "entry_low", "entry_high",
+            "stop_loss", "target", "rrr", "risk_pct",
+        )}
+        return narrative, plan
+    except (json.JSONDecodeError, AttributeError):
+        return raw, None
+
 
 def format_equity(value):
     """The prompts are in English but the equity is always Indonesian Rupiah —
@@ -128,8 +179,9 @@ def run_screen(req: ScreenRequest):
             f"Last close price: {cand['last_close']}."
         )
         prompt = raw_prompt.format(last_analisa=context_note, equity=format_equity(req.equity))
+        plan = None
         try:
-            analysis = providers.call_model(req.provider, req.model_id, prompt, image=chart_img)
+            analysis, plan = call_structured(req.provider, req.model_id, prompt, image=chart_img)
         except Exception as e:
             analysis = f"Analysis failed: {e}"
 
@@ -144,6 +196,7 @@ def run_screen(req: ScreenRequest):
                 "chart_b64": _img_to_b64(chart_img),
                 "analysis": analysis,
                 "analysis_html": render_markdown(analysis),
+                "plan": plan,
             }
         )
 
@@ -181,7 +234,7 @@ async def analyze_manual(
     final_prompt = raw_prompt.format(last_analisa=last_analisa, equity=format_equity(equity))
 
     try:
-        analysis = providers.call_model(provider, model_id, final_prompt, image=img)
+        analysis, plan = call_structured(provider, model_id, final_prompt, image=img)
     except Exception as e:
         raise HTTPException(502, f"Analysis failed: {e}")
 
@@ -196,6 +249,7 @@ async def analyze_manual(
         "analysis": analysis,
         "analysis_html": render_markdown(analysis),
         "journal_id": saved["id"],
+        "plan": plan,
     }
 
 
