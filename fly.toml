@@ -3,13 +3,6 @@ primary_region = "sin"
 
 [build]
 
-[env]
-  JOURNAL_FILE = "/data/journal.json"
-
-[[mounts]]
-  source = "pita_data"
-  destination = "/data"
-
 [http_service]
   internal_port = 8000
   force_https = true

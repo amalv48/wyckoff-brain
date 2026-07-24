@@ -7,7 +7,6 @@ RUN pip install --no-cache-dir -r webapp/backend/requirements.txt
 
 COPY . .
 
-ENV JOURNAL_FILE=/data/journal.json
 EXPOSE 8000
 
 WORKDIR /app/webapp/backend

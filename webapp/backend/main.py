@@ -1,7 +1,6 @@
 import base64
 import io
 import json
-from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
@@ -187,17 +186,16 @@ async def analyze_manual(
         raise HTTPException(502, f"Analysis failed: {e}")
 
     entry = {
-        "date": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         "model": f"{provider}/{model_id}",
         "strategy": prompt,
         "ticker": ticker or None,
         "analysis": analysis,
     }
-    entries = journal_store.append(entry)
+    saved = journal_store.append(entry)
     return {
         "analysis": analysis,
         "analysis_html": render_markdown(analysis),
-        "journal_index": len(entries) - 1,
+        "journal_id": saved["id"],
     }
 
 
@@ -218,14 +216,13 @@ class JournalEntryRequest(BaseModel):
 @app.post("/api/journal")
 def add_journal_entry(req: JournalEntryRequest):
     entry = {
-        "date": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         "model": req.model,
         "strategy": req.strategy,
         "ticker": req.ticker,
         "analysis": req.analysis,
     }
-    entries = journal_store.append(entry)
-    return {"journal_index": len(entries) - 1, "entry": entries[-1]}
+    saved = journal_store.append(entry)
+    return {"journal_id": saved["id"], "entry": saved}
 
 
 class TradeUpdateRequest(BaseModel):
@@ -236,11 +233,11 @@ class TradeUpdateRequest(BaseModel):
     notes: str = ""
 
 
-@app.patch("/api/journal/{index}")
-def update_journal_trade(index: int, req: TradeUpdateRequest):
+@app.patch("/api/journal/{entry_id}")
+def update_journal_trade(entry_id: int, req: TradeUpdateRequest):
     try:
-        return journal_store.update_trade(index, req.model_dump())
-    except IndexError:
+        return journal_store.update_trade(entry_id, req.model_dump())
+    except LookupError:
         raise HTTPException(404, "Journal entry not found")
 
 

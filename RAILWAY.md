@@ -20,7 +20,7 @@ file needed. Under the service's **Settings → Build**, confirm it says
 "Dockerfile" as the builder. If it instead tries to auto-detect a buildpack,
 explicitly set the builder to **Dockerfile** in Settings.
 
-## 3. Set your API keys
+## 3. Set your API keys and Supabase credentials
 
 Service → **Variables** tab → add:
 
@@ -28,32 +28,28 @@ Service → **Variables** tab → add:
 |---|---|
 | `ANTHROPIC_API_KEY` | your Claude key |
 | `GEMINI_API_KEY` | your Gemini key |
-| `JOURNAL_FILE` | `/data/journal.json` |
+| `SUPABASE_URL` | your Supabase project's API URL (Project Settings → API) |
+| `SUPABASE_SERVICE_ROLE_KEY` | the **service_role** secret key — not anon/publishable (same page, marked "secret") |
 
 These are injected as environment variables at runtime — never baked into
-the image or committed to the repo.
+the image or committed to the repo. The journal now lives in Supabase
+(Postgres), not a local file, so no persistent volume is needed for it —
+if you attached one earlier for `journal.json`, it's safe to leave or
+remove, it's just unused now.
 
-## 4. Attach a persistent volume
-
-Without this, `journal.json` resets every redeploy — same reasoning as the
-Fly.io setup.
-
-Service → **Settings → Volumes → New Volume**. Mount path: `/data`. 1GB is
-plenty for a JSON journal file.
-
-## 5. Deploy
+## 4. Deploy
 
 If it didn't already deploy automatically after step 1, click **Deploy** in
 the top right. Railway builds the Dockerfile and starts the container — the
 app already listens on Railway's dynamically assigned `$PORT` (that's what
 the `${PORT:-8000}` in the Dockerfile's CMD is for).
 
-## 6. Get your URL
+## 5. Get your URL
 
 Service → **Settings → Networking → Generate Domain**. Gives you a public
 `https://something.up.railway.app` URL.
 
-## 7. Test the screener
+## 6. Test the screener
 
 Open the URL, go to the Screener tab, pick LQ45, run it. This is the one
 thing that's never been tested outside a network-restricted sandbox — report

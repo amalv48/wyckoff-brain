@@ -38,33 +38,32 @@ first). Region `sin` (Singapore) is already set — closest to Indonesia.
 You do **not** need Docker installed locally — `fly deploy` builds the image
 on Fly's remote builders by default.
 
-## 4. Create the persistent volume for the journal
+## 4. Set your API keys and Supabase credentials as secrets
 
-This is what makes your trade journal survive restarts/redeploys — without
-it, `journal.json` resets every time the container restarts.
-
-```sh
-fly volumes create pita_data --region sin --size 1
-```
-
-(1 GB — the journal is a small JSON file, this is overkill and still cheap.)
-
-## 5. Set your API keys as secrets
+The journal lives in Supabase (Postgres), not a local file, so no
+persistent volume is needed — just secrets:
 
 ```sh
-fly secrets set ANTHROPIC_API_KEY="sk-ant-..." GEMINI_API_KEY="..."
+fly secrets set \
+  ANTHROPIC_API_KEY="sk-ant-..." \
+  GEMINI_API_KEY="..." \
+  SUPABASE_URL="https://<project-ref>.supabase.co" \
+  SUPABASE_SERVICE_ROLE_KEY="..."
 ```
 
+Use the **service_role** secret key from Supabase (Project Settings → API),
+not the anon/publishable one — the journal table's RLS has no
+anon/authenticated policies, so only service_role can read or write it.
 These become environment variables inside the container — never baked into
 the image or committed to the repo.
 
-## 6. Deploy
+## 5. Deploy
 
 ```sh
 fly deploy
 ```
 
-## 7. Open it
+## 6. Open it
 
 ```sh
 fly open
@@ -83,11 +82,9 @@ it should work, but confirm it end-to-end.
   `min_machines_running = 0` — it scales to zero and stops billing compute
   when nobody's using it, waking on the next request (a few seconds' cold
   start).
-- The 1GB volume runs a small monthly cost (Fly's per-GB storage rate,
-  currently well under $1/month for 1GB) that persists even when the VM is
-  stopped.
-- Check Fly's current pricing page before deploying if this matters to you —
-  their rates change.
+- Supabase's free tier covers a small journal table with no extra cost.
+- Check Fly's and Supabase's current pricing pages before deploying if this
+  matters to you — rates change.
 
 ## Redeploying after code changes
 

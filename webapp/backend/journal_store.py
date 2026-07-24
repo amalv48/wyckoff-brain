@@ -1,9 +1,10 @@
-import json
 import os
-from pathlib import Path
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-JOURNAL_PATH = Path(os.environ.get("JOURNAL_FILE", str(REPO_ROOT / "journal.json")))
+from supabase import create_client
+
+JAKARTA_TZ = ZoneInfo("Asia/Jakarta")
 
 EMPTY_TRADE = {
     "status": "Planned",
@@ -14,31 +15,55 @@ EMPTY_TRADE = {
     "pnl": None,
 }
 
+_client = None
+
+
+def _get_client():
+    global _client
+    if _client is None:
+        url = os.environ["SUPABASE_URL"]
+        key = os.environ["SUPABASE_SERVICE_ROLE_KEY"]
+        _client = create_client(url, key)
+    return _client
+
+
+def _format_date(created_at):
+    if not created_at:
+        return ""
+    dt = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
+    return dt.astimezone(JAKARTA_TZ).strftime("%Y-%m-%d %H:%M:%S")
+
+
+def _row_to_entry(row):
+    return {
+        "id": row["id"],
+        "date": _format_date(row.get("created_at")),
+        "model": row["model"],
+        "strategy": row["strategy"],
+        "ticker": row.get("ticker"),
+        "analysis": row["analysis"],
+        "trade": row.get("trade") or dict(EMPTY_TRADE),
+    }
+
 
 def load():
-    if JOURNAL_PATH.exists():
-        with open(JOURNAL_PATH, "r") as f:
-            return json.load(f)
-    return []
-
-
-def save(entries):
-    with open(JOURNAL_PATH, "w") as f:
-        json.dump(entries, f, indent=4)
+    res = _get_client().table("journal").select("*").order("id").execute()
+    return [_row_to_entry(r) for r in res.data]
 
 
 def append(entry):
-    entries = load()
-    entry.setdefault("trade", dict(EMPTY_TRADE))
-    entries.append(entry)
-    save(entries)
-    return entries
+    row = {
+        "model": entry["model"],
+        "strategy": entry["strategy"],
+        "ticker": entry.get("ticker"),
+        "analysis": entry["analysis"],
+        "trade": entry.get("trade", dict(EMPTY_TRADE)),
+    }
+    res = _get_client().table("journal").insert(row).execute()
+    return _row_to_entry(res.data[0])
 
 
-def update_trade(index, trade_fields):
-    entries = load()
-    if index < 0 or index >= len(entries):
-        raise IndexError("journal entry index out of range")
+def update_trade(entry_id, trade_fields):
     trade = dict(EMPTY_TRADE)
     trade.update(trade_fields)
     if (
@@ -50,6 +75,8 @@ def update_trade(index, trade_fields):
         trade["pnl"] = round((trade["exit_price"] - trade["entry_price"]) * trade["qty"], 2)
     else:
         trade["pnl"] = None
-    entries[index]["trade"] = trade
-    save(entries)
-    return entries[index]
+
+    res = _get_client().table("journal").update({"trade": trade}).eq("id", entry_id).execute()
+    if not res.data:
+        raise LookupError(f"journal entry {entry_id} not found")
+    return _row_to_entry(res.data[0])

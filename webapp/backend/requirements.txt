@@ -10,3 +10,5 @@ pandas
 Pillow
 markdown
 bleach
+supabase
+tzdata

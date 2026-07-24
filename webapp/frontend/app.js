@@ -259,10 +259,10 @@
   });
 
   // ---------- journal ----------
-  function journalRow(entry, idx) {
+  function journalRow(entry) {
     const trade = entry.trade || { status: "Planned", entry_price: null, exit_price: null, qty: null, notes: "", pnl: null };
     return `
-      <tr data-idx="${idx}">
+      <tr data-id="${entry.id}">
         <td class="mono">${escapeHtml(entry.date || "")}</td>
         <td class="mono">${escapeHtml(entry.ticker || "—")}</td>
         <td>${escapeHtml(entry.strategy || "")}</td>
@@ -287,7 +287,7 @@
       return;
     }
     tbody.innerHTML = state.journal
-      .map((e, i) => journalRow(e, i))
+      .map(journalRow)
       .reverse()
       .join("");
   }
@@ -296,7 +296,7 @@
     const btn = e.target.closest('button[data-action="update-trade"]');
     if (!btn) return;
     const row = btn.closest("tr");
-    const idx = parseInt(row.dataset.idx, 10);
+    const id = row.dataset.id;
     const payload = {
       status: row.querySelector(".f-status").value,
       entry_price: parseFloat(row.querySelector(".f-entry").value) || null,
@@ -306,7 +306,7 @@
     };
     btn.textContent = "...";
     try {
-      await fetch(`/api/journal/${idx}`, {
+      await fetch(`/api/journal/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
