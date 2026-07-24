@@ -74,7 +74,9 @@ tab_screener, tab_manual, tab_journal = st.tabs(
 
 def run_strategy(ticker_context, equity_value):
     raw_prompt = prompt_options[selected_prompt_key]
-    return raw_prompt.format(last_analisa=ticker_context, equity=equity_value)
+    # Prompts are in English but equity is always Indonesian Rupiah — a bare
+    # number reads as USD to the model, so spell out the currency.
+    return raw_prompt.format(last_analisa=ticker_context, equity=f"Rp {equity_value:,.0f}")
 
 
 # --- TAB 1: SCREENER INDEX ---

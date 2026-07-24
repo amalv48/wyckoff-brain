@@ -1,9 +1,9 @@
 <!doctype html>
-<html lang="id">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>PITA — Wyckoff Tape Reader untuk IDX</title>
+<title>PITA — Wyckoff Tape Reader for IDX</title>
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -12,18 +12,18 @@
   <header class="top">
     <div class="brand">
       <div class="mark">PITA<span class="dot">·</span>IDX</div>
-      <div class="tagline">pembaca tape ala Wyckoff, untuk saham LQ45 &amp; IDX30</div>
+      <div class="tagline">Wyckoff-style tape reading for LQ45 &amp; IDX30 stocks</div>
     </div>
     <div class="top-right">
-      <span class="live-pill" id="apiStatus"><span class="blip"></span>menghubungkan...</span>
-      <button class="theme-toggle" id="themeToggle">Mode Gelap</button>
+      <span class="live-pill" id="apiStatus"><span class="blip"></span>connecting...</span>
+      <button class="theme-toggle" id="themeToggle">Dark Mode</button>
     </div>
   </header>
 
   <nav class="tabs">
     <button class="active" data-view="screener">Screener</button>
-    <button data-view="manual">Analisa Manual</button>
-    <button data-view="journal">Jurnal<span class="n" id="journalCount"></span></button>
+    <button data-view="manual">Manual Analysis</button>
+    <button data-view="journal">Journal<span class="n" id="journalCount"></span></button>
   </nav>
 
   <!-- SCREENER -->
@@ -42,35 +42,35 @@
         <select id="selModel"></select>
       </div>
       <div class="field">
-        <label for="selPrompt">Strategi</label>
+        <label for="selPrompt">Strategy</label>
         <select id="selPrompt"></select>
       </div>
       <div class="field">
-        <label for="inpEquity">Modal (Rp)</label>
+        <label for="inpEquity">Capital (Rp)</label>
         <input type="text" id="inpEquity" value="9500000" inputmode="numeric">
       </div>
     </div>
 
     <div class="field" id="customTickersField" style="display:none;background:var(--bg-raised);border:1px solid var(--border);padding:14px 16px;margin-bottom:20px;">
-      <label for="inpCustomTickers">Ticker Custom (pisahkan koma, tanpa .JK)</label>
+      <label for="inpCustomTickers">Custom Tickers (comma-separated, without .JK)</label>
       <input type="text" id="inpCustomTickers" placeholder="BBCA, ANTM, MDKA">
     </div>
 
     <div class="run-row">
-      <button class="btn-primary" id="btnRunScreen">🚀 Jalankan Screening</button>
+      <button class="btn-primary" id="btnRunScreen">🚀 Run Screening</button>
       <label class="run-status" style="display:flex;align-items:center;gap:6px;">
-        Kandidat: <input type="text" id="inpTopN" value="8" style="width:36px;background:var(--bg-sunken);border:1px solid var(--border);color:var(--ink);font-family:ui-monospace,monospace;padding:3px 5px;">
+        Candidates: <input type="text" id="inpTopN" value="8" style="width:36px;background:var(--bg-sunken);border:1px solid var(--border);color:var(--ink);font-family:ui-monospace,monospace;padding:3px 5px;">
       </label>
       <span class="run-status" id="screenStatus"></span>
     </div>
 
     <div class="section-head">
-      <h2>Kandidat</h2>
-      <p>geser untuk lihat semua &rarr;</p>
+      <h2>Candidates</h2>
+      <p>scroll to see all &rarr;</p>
     </div>
 
     <div class="tape" id="tape">
-      <div class="empty-state" style="flex:1;">Belum ada hasil. Pilih index &amp; jalankan screening.</div>
+      <div class="empty-state" style="flex:1;">No results yet. Pick an index and run the screener.</div>
     </div>
   </section>
 
@@ -86,37 +86,37 @@
         <select id="selModelM"></select>
       </div>
       <div class="field">
-        <label for="selPromptM">Strategi</label>
+        <label for="selPromptM">Strategy</label>
         <select id="selPromptM"></select>
       </div>
     </div>
 
     <div class="upload-card">
-      <label for="fileChart">Screenshot Chart</label>
+      <label for="fileChart">Chart Screenshot</label>
       <input type="file" id="fileChart" accept="image/png,image/jpeg">
       <img id="preview" alt="preview">
-      <label for="inpTicker">Ticker (opsional)</label>
-      <input type="text" id="inpTicker" placeholder="mis. BBCA">
-      <button class="btn-primary" id="btnAnalyzeManual">🚀 Jalankan Analisa</button>
+      <label for="inpTicker">Ticker (optional)</label>
+      <input type="text" id="inpTicker" placeholder="e.g. BBCA">
+      <button class="btn-primary" id="btnAnalyzeManual">🚀 Run Analysis</button>
     </div>
 
     <div id="manualResultWrap" style="display:none;">
-      <div class="section-head"><h2>Hasil Analisa</h2></div>
-      <div class="manual-result" id="manualResult"></div>
+      <div class="section-head"><h2>Analysis Result</h2></div>
+      <div class="manual-result rendered-md" id="manualResult"></div>
     </div>
   </section>
 
   <!-- JOURNAL -->
   <section class="view" id="view-journal">
     <div class="section-head">
-      <h2>Riwayat &amp; tracking manual</h2>
-      <p>diisi setelah eksekusi di Stockbit</p>
+      <h2>History &amp; manual tracking</h2>
+      <p>filled in after executing on Stockbit</p>
     </div>
     <div style="overflow-x:auto;">
       <table class="ledger">
         <thead>
           <tr>
-            <th>Tanggal</th><th>Ticker</th><th>Strategi</th><th>Status</th>
+            <th>Date</th><th>Ticker</th><th>Strategy</th><th>Status</th>
             <th class="num">Entry</th><th class="num">Exit</th><th class="num">Qty</th><th class="num">P/L</th><th></th>
           </tr>
         </thead>
@@ -125,7 +125,7 @@
     </div>
   </section>
 
-  <footer class="note">PITA — data pasar via Yahoo Finance, analisa via Claude/Gemini. Bukan rekomendasi investasi.</footer>
+  <footer class="note">PITA — market data via Yahoo Finance, analysis via Claude/Gemini. Not investment advice.</footer>
 </div>
 
 <script src="app.js"></script>

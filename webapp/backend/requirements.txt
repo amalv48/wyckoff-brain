@@ -8,3 +8,5 @@ yfinance
 mplfinance
 pandas
 Pillow
+markdown
+bleach

@@ -5,6 +5,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
+import bleach
+import markdown as md_lib
 from dotenv import load_dotenv
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
@@ -28,6 +30,26 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+_ALLOWED_MD_TAGS = [
+    "p", "br", "hr", "strong", "b", "em", "i", "u",
+    "ul", "ol", "li",
+    "h1", "h2", "h3", "h4", "h5", "h6",
+    "table", "thead", "tbody", "tr", "th", "td",
+    "blockquote", "code", "pre", "span",
+]
+
+
+def format_equity(value):
+    """The prompts are in English but the equity is always Indonesian Rupiah —
+    a bare number reads as USD to the model, so spell out the currency."""
+    return f"Rp {value:,.0f}"
+
+
+def render_markdown(text):
+    """AI analysis text is Markdown; convert to sanitized HTML for display."""
+    html = md_lib.markdown(text, extensions=["tables", "nl2br", "sane_lists"])
+    return bleach.clean(html, tags=_ALLOWED_MD_TAGS, attributes={}, strip=True)
 
 
 def _load_json(name, default):
@@ -100,16 +122,16 @@ def run_screen(req: ScreenRequest):
         df = data[ticker]
         chart_img = screener.render_chart(df, ticker)
         context_note = (
-            f"Ini hasil screening otomatis untuk saham {ticker}. "
-            f"Belum ada analisa manual sebelumnya. Sinyal kuantitatif yang "
-            f"terdeteksi: {'; '.join(cand['signals'])}. "
-            f"Harga close terakhir: {cand['last_close']}."
+            f"This is an automated screening result for {ticker}. "
+            f"No prior manual analysis is available. Detected quantitative "
+            f"signals: {'; '.join(cand['signals'])}. "
+            f"Last close price: {cand['last_close']}."
         )
-        prompt = raw_prompt.format(last_analisa=context_note, equity=req.equity)
+        prompt = raw_prompt.format(last_analisa=context_note, equity=format_equity(req.equity))
         try:
             analysis = providers.call_model(req.provider, req.model_id, prompt, image=chart_img)
         except Exception as e:
-            analysis = f"Analisa gagal: {e}"
+            analysis = f"Analysis failed: {e}"
 
         results.append(
             {
@@ -121,10 +143,16 @@ def run_screen(req: ScreenRequest):
                 "last_close": cand["last_close"],
                 "chart_b64": _img_to_b64(chart_img),
                 "analysis": analysis,
+                "analysis_html": render_markdown(analysis),
             }
         )
 
-    return {"requested": len(tickers), "fetched": len(data), "candidates": results}
+    return {
+        "requested": len(tickers),
+        "fetched": len(data),
+        "max_score": screener.MAX_SCORE,
+        "candidates": results,
+    }
 
 
 # --- Manual chart analysis ---
@@ -148,14 +176,14 @@ async def analyze_manual(
 
     entries = journal_store.load()
     last_entries = [e for e in entries if ticker and e.get("ticker") == ticker]
-    last_analisa = last_entries[-1]["analysis"] if last_entries else "Tidak ada data sebelumnya."
+    last_analisa = last_entries[-1]["analysis"] if last_entries else "No prior analysis available."
 
-    final_prompt = raw_prompt.format(last_analisa=last_analisa, equity=equity)
+    final_prompt = raw_prompt.format(last_analisa=last_analisa, equity=format_equity(equity))
 
     try:
         analysis = providers.call_model(provider, model_id, final_prompt, image=img)
     except Exception as e:
-        raise HTTPException(502, f"Analisa gagal: {e}")
+        raise HTTPException(502, f"Analysis failed: {e}")
 
     entry = {
         "date": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
@@ -165,7 +193,11 @@ async def analyze_manual(
         "analysis": analysis,
     }
     entries = journal_store.append(entry)
-    return {"analysis": analysis, "journal_index": len(entries) - 1}
+    return {
+        "analysis": analysis,
+        "analysis_html": render_markdown(analysis),
+        "journal_index": len(entries) - 1,
+    }
 
 
 # --- Journal ---

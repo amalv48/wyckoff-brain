@@ -15,6 +15,9 @@ def _jk_ticker(code):
     return code if code.endswith(".JK") else f"{code}.JK"
 
 
+MAX_SCORE = 8
+
+
 def fetch_ohlcv(tickers, period="6mo"):
     """Fetch OHLCV per ticker from Yahoo Finance. Skips tickers with no/short history."""
     data = {}
@@ -55,16 +58,16 @@ def score_stock(df):
     signals = []
     if vol_ratio > 1.5:
         score += 2
-        signals.append(f"Volume {vol_ratio:.1f}x rata-rata 20 hari")
+        signals.append(f"Volume {vol_ratio:.1f}x the 20-day average")
     if price_position < 0.35:
         score += 2
-        signals.append("Harga di area bawah range 20 hari (potensi akumulasi)")
+        signals.append("Price in the lower area of the 20-day range (potential accumulation)")
     if today["Close"] > sma20:
         score += 1
-        signals.append("Close di atas rata-rata 20 hari")
+        signals.append("Close above the 20-day average")
     if spring:
         score += 3
-        signals.append("Pola Spring: low menembus support lalu close kembali di atasnya")
+        signals.append("Spring pattern: low undercut support, then closed back above it")
 
     return {
         "score": score,

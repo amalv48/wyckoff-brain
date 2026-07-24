@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  const state = { models: {}, indices: { names: [], tickers: {} }, prompts: [], journal: [] };
+  const state = { models: {}, indices: { names: [], tickers: {} }, prompts: [], journal: [], maxScore: 8 };
 
   const $ = (id) => document.getElementById(id);
 
@@ -23,7 +23,7 @@
       root.getAttribute("data-theme") === "dark" ||
       (!root.getAttribute("data-theme") && window.matchMedia("(prefers-color-scheme: dark)").matches);
     root.setAttribute("data-theme", isDark ? "light" : "dark");
-    $("themeToggle").textContent = isDark ? "Mode Gelap" : "Mode Terang";
+    $("themeToggle").textContent = isDark ? "Dark Mode" : "Light Mode";
   });
 
   // ---------- tabs ----------
@@ -67,7 +67,7 @@
       state.prompts = prompts.names;
       state.journal = journal;
 
-      $("apiStatus").innerHTML = '<span class="blip"></span>terhubung ke backend';
+      $("apiStatus").innerHTML = '<span class="blip"></span>connected to backend';
 
       populateProviderModel("selProvider", "selModel");
       populateProviderModel("selProviderM", "selModelM");
@@ -86,15 +86,15 @@
       renderJournal();
     } catch (e) {
       $("apiStatus").className = "live-pill err";
-      $("apiStatus").innerHTML = '<span class="blip"></span>backend tidak terhubung';
+      $("apiStatus").innerHTML = '<span class="blip"></span>backend not connected';
       console.error(e);
     }
   }
 
   // ---------- screener ----------
   function phaseClass(score) {
-    if (score >= 5) return "strong";
-    if (score >= 3) return "mid";
+    if (score >= state.maxScore * 0.6) return "strong";
+    if (score >= state.maxScore * 0.35) return "mid";
     return "weak";
   }
 
@@ -106,16 +106,16 @@
             <div class="ticker">${escapeHtml(c.ticker)}</div>
             <div class="price mono">${c.last_close}</div>
           </div>
-          <span class="phase ${phaseClass(c.score)}">skor ${c.score}</span>
+          <span class="phase ${phaseClass(c.score)}">${c.score}/${state.maxScore}</span>
         </div>
         <img class="chart" src="data:image/png;base64,${c.chart_b64}" alt="Chart ${escapeHtml(c.ticker)}">
         <div class="signals">
           ${c.signals.map((s) => `<span class="tag">${escapeHtml(s)}</span>`).join("")}
         </div>
-        <p class="excerpt">${escapeHtml(c.analysis)}</p>
+        <div class="excerpt rendered-md">${c.analysis_html}</div>
         <div class="foot">
-          <button class="btn-link" data-action="expand">Baca semua &rarr;</button>
-          <button class="btn-save" data-action="save">+ Jurnal</button>
+          <button class="btn-link" data-action="expand">Read more &rarr;</button>
+          <button class="btn-save" data-action="save">+ Journal</button>
         </div>
       </article>`;
   }
@@ -124,8 +124,8 @@
     const btn = $("btnRunScreen");
     const statusEl = $("screenStatus");
     btn.disabled = true;
-    statusEl.textContent = "Mengambil data & menjalankan AI...";
-    $("tape").innerHTML = '<div class="empty-state" style="flex:1;">Sedang memproses...</div>';
+    statusEl.textContent = "Fetching data & running AI...";
+    $("tape").innerHTML = '<div class="empty-state" style="flex:1;">Processing...</div>';
 
     const index = $("selIndex").value;
     const customTickers = $("inpCustomTickers").value
@@ -155,17 +155,18 @@
       }
       const data = await res.json();
       state.lastScreen = data.candidates;
+      state.maxScore = data.max_score || state.maxScore;
 
-      statusEl.textContent = `${data.fetched}/${data.requested} saham berhasil diambil, ${data.candidates.length} kandidat lolos filter.`;
+      statusEl.textContent = `${data.fetched}/${data.requested} stocks fetched, ${data.candidates.length} candidates passed the filter.`;
 
       if (!data.candidates.length) {
-        $("tape").innerHTML = '<div class="empty-state" style="flex:1;">Tidak ada kandidat yang lolos filter kuantitatif hari ini.</div>';
+        $("tape").innerHTML = '<div class="empty-state" style="flex:1;">No candidates passed the quantitative filter today.</div>';
       } else {
         $("tape").innerHTML = data.candidates.map(ticketHtml).join("");
       }
     } catch (e) {
-      statusEl.textContent = "Gagal: " + e.message;
-      $("tape").innerHTML = `<div class="empty-state" style="flex:1;">Screening gagal: ${escapeHtml(e.message)}</div>`;
+      statusEl.textContent = "Failed: " + e.message;
+      $("tape").innerHTML = `<div class="empty-state" style="flex:1;">Screening failed: ${escapeHtml(e.message)}</div>`;
     } finally {
       btn.disabled = false;
     }
@@ -183,12 +184,12 @@
     if (btn.dataset.action === "expand") {
       const excerpt = card.querySelector(".excerpt");
       excerpt.classList.toggle("expanded");
-      btn.textContent = excerpt.classList.contains("expanded") ? "Ringkas ←" : "Baca semua →";
+      btn.textContent = excerpt.classList.contains("expanded") ? "Collapse ←" : "Read more →";
     }
 
     if (btn.dataset.action === "save") {
       btn.disabled = true;
-      btn.textContent = "Menyimpan...";
+      btn.textContent = "Saving...";
       try {
         await fetch("/api/journal", {
           method: "POST",
@@ -202,9 +203,9 @@
         });
         state.journal = await fetch("/api/journal").then((r) => r.json());
         renderJournal();
-        btn.textContent = "Tersimpan ✓";
+        btn.textContent = "Saved ✓";
       } catch (err) {
-        btn.textContent = "Gagal";
+        btn.textContent = "Failed";
         btn.disabled = false;
       }
     }
@@ -222,12 +223,12 @@
   $("btnAnalyzeManual").addEventListener("click", async () => {
     const file = $("fileChart").files[0];
     if (!file) {
-      alert("Upload screenshot chart dulu.");
+      alert("Please upload a chart screenshot first.");
       return;
     }
     const btn = $("btnAnalyzeManual");
     btn.disabled = true;
-    btn.textContent = "Menganalisa...";
+    btn.textContent = "Analyzing...";
 
     const form = new FormData();
     form.append("file", file);
@@ -245,23 +246,19 @@
       }
       const data = await res.json();
       $("manualResultWrap").style.display = "block";
-      $("manualResult").textContent = data.analysis;
+      $("manualResult").innerHTML = data.analysis_html;
       state.journal = await fetch("/api/journal").then((r) => r.json());
       renderJournal();
     } catch (e) {
       $("manualResultWrap").style.display = "block";
-      $("manualResult").textContent = "Analisa gagal: " + e.message;
+      $("manualResult").textContent = "Analysis failed: " + e.message;
     } finally {
       btn.disabled = false;
-      btn.textContent = "🚀 Jalankan Analisa";
+      btn.textContent = "🚀 Run Analysis";
     }
   });
 
   // ---------- journal ----------
-  function statusClass(s) {
-    return { Closed: "closed", Open: "open", Planned: "planned", Skipped: "skipped" }[s] || "planned";
-  }
-
   function journalRow(entry, idx) {
     const trade = entry.trade || { status: "Planned", entry_price: null, exit_price: null, qty: null, notes: "", pnl: null };
     return `
@@ -278,7 +275,7 @@
         <td class="num"><input class="f-exit mono" type="number" value="${trade.exit_price ?? ""}"></td>
         <td class="num"><input class="f-qty mono" type="number" value="${trade.qty ?? ""}" style="width:60px;"></td>
         <td class="num mono ${trade.pnl > 0 ? "pnl up" : trade.pnl < 0 ? "pnl down" : ""}">${trade.pnl != null ? formatRp(trade.pnl) : "—"}</td>
-        <td><button class="btn-link" data-action="update-trade">Simpan</button></td>
+        <td><button class="btn-link" data-action="update-trade">Save</button></td>
       </tr>`;
   }
 
@@ -286,7 +283,7 @@
     $("journalCount").textContent = state.journal.length ? state.journal.length : "";
     const tbody = $("journalBody");
     if (!state.journal.length) {
-      tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:var(--ink-faint);font-style:italic;">Belum ada entri jurnal.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:var(--ink-faint);font-style:italic;">No journal entries yet.</td></tr>';
       return;
     }
     tbody.innerHTML = state.journal
@@ -317,7 +314,7 @@
       state.journal = await fetch("/api/journal").then((r) => r.json());
       renderJournal();
     } catch (err) {
-      btn.textContent = "Gagal";
+      btn.textContent = "Failed";
     }
   });
 
