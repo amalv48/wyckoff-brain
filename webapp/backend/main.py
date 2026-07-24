@@ -61,7 +61,14 @@ ANALYSIS_SCHEMA = {
         "risk_pct": {"type": ["number", "null"], "description": "Position risk as a percent of equity, e.g. 1.5."},
         "narrative_markdown": {
             "type": "string",
-            "description": "The full analysis written as Markdown, same content/tone/language as before.",
+            "description": (
+                "Only the phase/structure analysis and reasoning, as normal "
+                "sentence-case Markdown paragraphs and headings (no all-caps). "
+                "Do NOT include a summary table, and do NOT restate the "
+                "verdict, entry range, stop loss, target, RRR, or risk "
+                "percentage here — those already appear in the fields above "
+                "and are shown separately in the UI."
+            ),
         },
     },
     "required": [
@@ -72,6 +79,17 @@ ANALYSIS_SCHEMA = {
 }
 
 
+def _fix_double_escaped_newlines(text):
+    """Defensive cleanup: some models occasionally double-escape newlines
+    inside a JSON string value (writing the literal two characters \\n
+    instead of a real line break), which survives json.loads() as literal
+    backslash-n text and renders as garbage. Collapse it back to real
+    newlines if it slipped through."""
+    if "\\n" in text:
+        text = text.replace("\\r\\n", "\n").replace("\\n", "\n")
+    return text
+
+
 def call_structured(provider, model_id, prompt, image=None):
     """Call the model with ANALYSIS_SCHEMA and return (narrative_text, plan_dict).
     Falls back to a plain narrative-only call (plan=None) if structured output
@@ -80,14 +98,14 @@ def call_structured(provider, model_id, prompt, image=None):
     raw = providers.call_model(provider, model_id, prompt, image=image, response_schema=ANALYSIS_SCHEMA)
     try:
         parsed = json.loads(raw)
-        narrative = parsed.get("narrative_markdown") or raw
+        narrative = _fix_double_escaped_newlines(parsed.get("narrative_markdown") or raw)
         plan = {k: parsed.get(k) for k in (
             "verdict", "phase", "entry_low", "entry_high",
             "stop_loss", "target", "rrr", "risk_pct",
         )}
         return narrative, plan
     except (json.JSONDecodeError, AttributeError):
-        return raw, None
+        return _fix_double_escaped_newlines(raw), None
 
 
 def format_equity(value):

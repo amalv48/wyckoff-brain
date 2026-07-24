@@ -100,23 +100,22 @@
 
   function planHtml(plan) {
     if (!plan) return "";
-    if (plan.verdict === "SETUP") {
-      const rows = [
-        ["Entry", plan.entry_low != null && plan.entry_high != null ? `${plan.entry_low}–${plan.entry_high}` : "—"],
-        ["Stop", plan.stop_loss ?? "—"],
-        ["Target", plan.target ?? "—"],
-        ["RRR", plan.rrr != null ? `1:${plan.rrr}` : "—"],
-        ["Risk", plan.risk_pct != null ? `${plan.risk_pct}%` : "—"],
-      ];
-      return `
-        <div class="plan-stats">
-          <span class="verdict setup">Setup${plan.phase ? " · " + escapeHtml(plan.phase) : ""}</span>
-          <div class="plan-grid mono">
-            ${rows.map(([k, v]) => `<div class="plan-cell"><span>${k}</span><b>${escapeHtml(String(v))}</b></div>`).join("")}
-          </div>
-        </div>`;
-    }
-    return `<div class="plan-stats"><span class="verdict no-setup">No Setup</span></div>`;
+    const isSetup = plan.verdict === "SETUP";
+    const rows = [
+      ["Phase", plan.phase || "—"],
+      ["Entry", plan.entry_low != null && plan.entry_high != null ? `${plan.entry_low}–${plan.entry_high}` : "—"],
+      ["Stop", plan.stop_loss ?? "—"],
+      ["Target", plan.target ?? "—"],
+      ["RRR", plan.rrr != null ? `1:${plan.rrr}` : "—"],
+      ["Risk", plan.risk_pct != null ? `${plan.risk_pct}%` : "—"],
+    ];
+    return `
+      <div class="plan-stats">
+        <span class="verdict ${isSetup ? "setup" : "no-setup"}">${isSetup ? "Setup" : "No Setup"}</span>
+        <div class="plan-grid mono">
+          ${rows.map(([k, v]) => `<div class="plan-cell"><span>${k}</span><b>${escapeHtml(String(v))}</b></div>`).join("")}
+        </div>
+      </div>`;
   }
 
   function ticketHtml(c, idx) {
