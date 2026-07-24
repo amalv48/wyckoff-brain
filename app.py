@@ -6,7 +6,7 @@ import streamlit as st
 from PIL import Image
 
 from providers import call_model
-from screener import fetch_ohlcv, load_indices, render_chart, shortlist
+from screener import MAX_SCORE, fetch_index_reference, fetch_ohlcv, load_indices, render_chart, shortlist
 
 JOURNAL_PATH = "journal.json"
 
@@ -109,10 +109,11 @@ with tab_screener:
         else:
             with st.spinner(f"Mengambil data {len(tickers)} saham..."):
                 data = fetch_ohlcv(tickers)
+                index_df = fetch_index_reference()
             if not data:
                 st.error("Gagal mengambil data harga. Coba lagi nanti.")
             else:
-                candidates = shortlist(data, top_n=top_n)
+                candidates = shortlist(data, top_n=top_n, index_df=index_df)
                 if not candidates:
                     st.info("Tidak ada kandidat yang lolos filter kuantitatif hari ini.")
                 st.session_state.screener_results = []
@@ -145,7 +146,7 @@ with tab_screener:
                     )
 
     for i, result in enumerate(st.session_state.get("screener_results", [])):
-        with st.expander(f"📊 {result['ticker']} (skor kuantitatif: {result['score']})"):
+        with st.expander(f"📊 {result['ticker']} (skor kuantitatif: {result['score']}/{MAX_SCORE})"):
             col1, col2 = st.columns([1, 1])
             with col1:
                 st.image(result["chart"], use_container_width=True)

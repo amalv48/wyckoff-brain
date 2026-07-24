@@ -114,7 +114,8 @@ def run_screen(req: ScreenRequest):
     raw_prompt = prompts[req.prompt]
 
     data = screener.fetch_ohlcv(tickers)
-    candidates = screener.shortlist(data, top_n=req.top_n)
+    index_df = screener.fetch_index_reference()
+    candidates = screener.shortlist(data, top_n=req.top_n, index_df=index_df)
 
     results = []
     for cand in candidates:
