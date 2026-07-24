@@ -234,6 +234,8 @@ section.view.active { display: block; }
 
 .ticket .foot { padding: 12px 16px 16px; display: flex; justify-content: space-between; align-items: center; }
 .btn-link { background: none; border: none; font-family: ui-monospace, monospace; font-size: 11.5px; letter-spacing: 0.05em; text-transform: uppercase; color: var(--accent); cursor: pointer; padding: 0; }
+.btn-link.btn-danger { color: var(--loss); margin-left: 10px; }
+.btn-link:disabled { opacity: 0.5; cursor: default; }
 .btn-save { font-family: ui-monospace, monospace; font-size: 11px; letter-spacing: 0.03em; background: var(--accent); color: var(--accent-ink); border: none; padding: 7px 10px; cursor: pointer; }
 .btn-save:disabled { opacity: 0.4; cursor: default; }
 

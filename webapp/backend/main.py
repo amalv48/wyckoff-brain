@@ -295,5 +295,16 @@ def update_journal_trade(entry_id: int, req: TradeUpdateRequest):
         raise HTTPException(404, "Journal entry not found")
 
 
+@app.delete("/api/journal/{entry_id}")
+def delete_journal_entry(entry_id: int):
+    try:
+        journal_store.archive(entry_id)
+    except LookupError:
+        raise HTTPException(404, "Journal entry not found")
+    except journal_store.SchemaNotReadyError as e:
+        raise HTTPException(503, str(e))
+    return {"ok": True}
+
+
 # --- Static frontend ---
 app.mount("/", StaticFiles(directory=str(FRONTEND_DIR), html=True), name="frontend")

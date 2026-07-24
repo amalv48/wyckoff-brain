@@ -297,7 +297,10 @@
         <td class="num"><input class="f-exit mono" type="number" value="${trade.exit_price ?? ""}"></td>
         <td class="num"><input class="f-qty mono" type="number" value="${trade.qty ?? ""}" style="width:60px;"></td>
         <td class="num mono ${trade.pnl > 0 ? "pnl up" : trade.pnl < 0 ? "pnl down" : ""}">${trade.pnl != null ? formatRp(trade.pnl) : "—"}</td>
-        <td><button class="btn-link" data-action="update-trade">Save</button></td>
+        <td>
+          <button class="btn-link" data-action="update-trade">Save</button>
+          <button class="btn-link btn-danger" data-action="delete-entry">Delete</button>
+        </td>
       </tr>`;
   }
 
@@ -315,28 +318,53 @@
   }
 
   $("journalBody").addEventListener("click", async (e) => {
-    const btn = e.target.closest('button[data-action="update-trade"]');
-    if (!btn) return;
-    const row = btn.closest("tr");
-    const id = row.dataset.id;
-    const payload = {
-      status: row.querySelector(".f-status").value,
-      entry_price: parseFloat(row.querySelector(".f-entry").value) || null,
-      exit_price: parseFloat(row.querySelector(".f-exit").value) || null,
-      qty: parseInt(row.querySelector(".f-qty").value, 10) || null,
-      notes: "",
-    };
-    btn.textContent = "...";
-    try {
-      await fetch(`/api/journal/${id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      state.journal = await fetch("/api/journal").then((r) => r.json());
-      renderJournal();
-    } catch (err) {
-      btn.textContent = "Failed";
+    const saveBtn = e.target.closest('button[data-action="update-trade"]');
+    const deleteBtn = e.target.closest('button[data-action="delete-entry"]');
+
+    if (saveBtn) {
+      const row = saveBtn.closest("tr");
+      const id = row.dataset.id;
+      const payload = {
+        status: row.querySelector(".f-status").value,
+        entry_price: parseFloat(row.querySelector(".f-entry").value) || null,
+        exit_price: parseFloat(row.querySelector(".f-exit").value) || null,
+        qty: parseInt(row.querySelector(".f-qty").value, 10) || null,
+        notes: "",
+      };
+      saveBtn.textContent = "...";
+      try {
+        await fetch(`/api/journal/${id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        state.journal = await fetch("/api/journal").then((r) => r.json());
+        renderJournal();
+      } catch (err) {
+        saveBtn.textContent = "Failed";
+      }
+    }
+
+    if (deleteBtn) {
+      const row = deleteBtn.closest("tr");
+      const id = row.dataset.id;
+      const ticker = row.querySelector(".mono").textContent;
+      if (!confirm(`Delete journal entry for ${ticker}? This can't be undone from the UI.`)) return;
+      deleteBtn.textContent = "...";
+      deleteBtn.disabled = true;
+      try {
+        const res = await fetch(`/api/journal/${id}`, { method: "DELETE" });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error(err.detail || res.statusText);
+        }
+        state.journal = await fetch("/api/journal").then((r) => r.json());
+        renderJournal();
+      } catch (err) {
+        deleteBtn.textContent = "Failed";
+        deleteBtn.disabled = false;
+        alert("Delete failed: " + err.message);
+      }
     }
   });
 
