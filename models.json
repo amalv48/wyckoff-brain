@@ -6,8 +6,8 @@
         "Fable 5 (deepest reasoning)": "claude-fable-5"
     },
     "Gemini": {
-        "Gemini 3 Flash Preview": "gemini-3-flash-preview",
-        "Gemini 1.5 Flash": "gemini-1.5-flash",
-        "Gemini 1.5 Pro": "gemini-1.5-pro"
+        "Gemini Flash (latest, recommended)": "gemini-flash-latest",
+        "Gemini Flash Lite (latest, fastest)": "gemini-flash-lite-latest",
+        "Gemini Pro (latest, needs billing on your project)": "gemini-pro-latest"
     }
 }
