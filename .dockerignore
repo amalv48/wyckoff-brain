@@ -1,0 +1,8 @@
+.git
+.streamlit
+webapp/backend/.env
+webapp/backend/__pycache__
+__pycache__
+*.pyc
+.venv
+.devcontainer

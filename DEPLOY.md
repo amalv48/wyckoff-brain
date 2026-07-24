@@ -1,0 +1,97 @@
+# Deploying PITA to Fly.io
+
+This can't be run from inside this dev sandbox (its network policy blocks
+`fly.io` outright, same as it blocked Yahoo Finance). Run these from your own
+machine.
+
+## 1. Install the Fly CLI
+
+```sh
+curl -L https://fly.io/install.sh | sh
+```
+
+(or `brew install flyctl` on macOS)
+
+## 2. Log in
+
+```sh
+fly auth login
+```
+
+Opens a browser. Sign up if you don't have an account — Fly asks for a card
+even on the free allowance, but a single small always-off-when-idle app like
+this should cost close to nothing (see Cost below).
+
+## 3. Launch the app (don't deploy yet)
+
+From the repo root, where `fly.toml` and `Dockerfile` already live:
+
+```sh
+fly launch --no-deploy
+```
+
+It will detect the existing `fly.toml`/`Dockerfile` and ask to confirm. The
+app name `pita-idx` in `fly.toml` is almost certainly taken — when it asks,
+pick a different name (or edit the `app = "..."` line in `fly.toml` yourself
+first). Region `sin` (Singapore) is already set — closest to Indonesia.
+
+You do **not** need Docker installed locally — `fly deploy` builds the image
+on Fly's remote builders by default.
+
+## 4. Create the persistent volume for the journal
+
+This is what makes your trade journal survive restarts/redeploys — without
+it, `journal.json` resets every time the container restarts.
+
+```sh
+fly volumes create pita_data --region sin --size 1
+```
+
+(1 GB — the journal is a small JSON file, this is overkill and still cheap.)
+
+## 5. Set your API keys as secrets
+
+```sh
+fly secrets set ANTHROPIC_API_KEY="sk-ant-..." GEMINI_API_KEY="..."
+```
+
+These become environment variables inside the container — never baked into
+the image or committed to the repo.
+
+## 6. Deploy
+
+```sh
+fly deploy
+```
+
+## 7. Open it
+
+```sh
+fly open
+```
+
+## Verifying after deploy
+
+The one thing I couldn't test from this sandbox: the screener's Yahoo
+Finance fetch. Once deployed, open the Screener tab, pick LQ45, and run a
+screening — Fly's network isn't restricted the way this dev sandbox's is, so
+it should work, but confirm it end-to-end.
+
+## Cost
+
+- The VM (`shared-cpu-1x`, 512MB) is configured with `auto_stop_machines`/
+  `min_machines_running = 0` — it scales to zero and stops billing compute
+  when nobody's using it, waking on the next request (a few seconds' cold
+  start).
+- The 1GB volume runs a small monthly cost (Fly's per-GB storage rate,
+  currently well under $1/month for 1GB) that persists even when the VM is
+  stopped.
+- Check Fly's current pricing page before deploying if this matters to you —
+  their rates change.
+
+## Redeploying after code changes
+
+```sh
+git pull
+fly deploy
+```

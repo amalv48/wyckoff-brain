@@ -1,8 +1,9 @@
 import json
+import os
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-JOURNAL_PATH = REPO_ROOT / "journal.json"
+JOURNAL_PATH = Path(os.environ.get("JOURNAL_FILE", str(REPO_ROOT / "journal.json")))
 
 EMPTY_TRADE = {
     "status": "Planned",
