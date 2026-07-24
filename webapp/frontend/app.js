@@ -16,6 +16,33 @@
     return "Rp " + Number(n).toLocaleString("id-ID");
   }
 
+  function digitsOnly(s) {
+    return (s || "").replace(/[^\d]/g, "");
+  }
+
+  function formatThousands(digits) {
+    return digits ? Number(digits).toLocaleString("en-US") : "";
+  }
+
+  // ---------- capital input: auto-format with thousands commas ----------
+  const equityInput = $("inpEquity");
+  function reformatEquity() {
+    const digitsBeforeCursor = digitsOnly(equityInput.value.slice(0, equityInput.selectionStart));
+    equityInput.value = formatThousands(digitsOnly(equityInput.value));
+    let pos = 0, seen = 0;
+    while (pos < equityInput.value.length && seen < digitsBeforeCursor.length) {
+      if (/\d/.test(equityInput.value[pos])) seen++;
+      pos++;
+    }
+    equityInput.setSelectionRange(pos, pos);
+  }
+  equityInput.addEventListener("input", reformatEquity);
+  equityInput.value = formatThousands(digitsOnly(equityInput.value));
+
+  function parseEquity() {
+    return parseFloat(digitsOnly(equityInput.value)) || 0;
+  }
+
   // ---------- theme ----------
   const root = document.documentElement;
   $("themeToggle").addEventListener("click", function () {
@@ -145,8 +172,8 @@
     const btn = $("btnRunScreen");
     const statusEl = $("screenStatus");
     btn.disabled = true;
-    statusEl.textContent = "Fetching data & running AI...";
-    $("tape").innerHTML = '<div class="empty-state" style="flex:1;">Processing...</div>';
+    statusEl.innerHTML = '<span class="spinner"></span> Fetching data &amp; running AI...';
+    $("tape").innerHTML = '<div class="empty-state processing" style="flex:1;"><span class="spinner"></span> Processing...</div>';
 
     const index = $("selIndex").value;
     const customTickers = $("inpCustomTickers").value
@@ -157,11 +184,11 @@
     const body = {
       index,
       custom_tickers: index === "Custom" ? customTickers : null,
-      top_n: parseInt($("inpTopN").value, 10) || 8,
+      top_n: parseInt($("inpTopN").value, 10) || 4,
       provider: $("selProvider").value,
       model_id: $("selModel").value,
       prompt: $("selPrompt").value,
-      equity: parseFloat($("inpEquity").value) || 0,
+      equity: parseEquity(),
     };
 
     try {
@@ -249,14 +276,16 @@
     }
     const btn = $("btnAnalyzeManual");
     btn.disabled = true;
-    btn.textContent = "Analyzing...";
+    btn.innerHTML = '<span class="spinner spinner-inline"></span> Analyzing...';
+    $("manualResultWrap").style.display = "block";
+    $("manualResult").innerHTML = '<div class="empty-state processing"><span class="spinner"></span> Analyzing chart...</div>';
 
     const form = new FormData();
     form.append("file", file);
     form.append("provider", $("selProviderM").value);
     form.append("model_id", $("selModelM").value);
     form.append("prompt", $("selPromptM").value);
-    form.append("equity", parseFloat($("inpEquity").value) || 0);
+    form.append("equity", parseEquity());
     form.append("ticker", $("inpTicker").value.trim().toUpperCase());
 
     try {

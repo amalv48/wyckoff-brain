@@ -157,7 +157,7 @@ def shortlist(data, top_n=8, index_df=None):
             continue
         result["ticker"] = ticker
         scored.append(result)
-    scored.sort(key=lambda x: x["score"], reverse=True)
+    scored.sort(key=lambda x: (-x["score"], x["ticker"]))
     return scored[:top_n]
 
 

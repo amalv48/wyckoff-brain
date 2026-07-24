@@ -159,7 +159,7 @@ def get_prompts():
 class ScreenRequest(BaseModel):
     index: str
     custom_tickers: Optional[list[str]] = None
-    top_n: int = 8
+    top_n: int = 4
     provider: str
     model_id: str
     prompt: str

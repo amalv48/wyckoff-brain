@@ -60,7 +60,7 @@
 
 body {
   margin: 0;
-  background: linear-gradient(var(--grid-line) 1px, transparent 1px) 0 0 / 100% 28px, var(--bg);
+  background: var(--bg);
   color: var(--ink);
   font-family: Georgia, "Iowan Old Style", "Palatino Linotype", "Noto Serif", serif;
   font-size: 16px;
@@ -240,6 +240,16 @@ section.view.active { display: block; }
 .btn-save:disabled { opacity: 0.4; cursor: default; }
 
 .empty-state { padding: 40px 20px; text-align: center; color: var(--ink-faint); font-style: italic; border: 1px dashed var(--border); margin-bottom: 40px; }
+.empty-state.processing { font-style: normal; color: var(--ink-dim); }
+
+.spinner {
+  display: inline-block; width: 13px; height: 13px; vertical-align: -2px;
+  border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+.empty-state.processing .spinner { width: 16px; height: 16px; margin-right: 6px; vertical-align: -3px; }
+.spinner-inline { margin-right: 2px; }
+@keyframes spin { to { transform: rotate(360deg); } }
 
 .upload-card { background: var(--bg-raised); border: 1px solid var(--border); padding: 22px; margin-bottom: 26px; max-width: 560px; }
 .upload-card label { display: block; font-family: ui-monospace, monospace; font-size: 10.5px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-faint); margin-bottom: 8px; }
@@ -276,7 +286,7 @@ section.view.active { display: block; }
 
 footer.note { margin-top: 40px; padding-top: 18px; border-top: 1px solid var(--border); font-size: 12.5px; color: var(--ink-faint); font-style: italic; }
 
-@media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; transition: none !important; } }
+@media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; transition: none !important; animation: none !important; } }
 
 @media (max-width: 900px) { .controls { grid-template-columns: repeat(2, 1fr); } }
 @media (max-width: 640px) { header.top { flex-direction: column; align-items: flex-start; gap: 12px; } }
