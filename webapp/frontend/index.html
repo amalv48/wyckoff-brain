@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PITA — Wyckoff Tape Reader untuk IDX</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="wrap">
+
+  <header class="top">
+    <div class="brand">
+      <div class="mark">PITA<span class="dot">·</span>IDX</div>
+      <div class="tagline">pembaca tape ala Wyckoff, untuk saham LQ45 &amp; IDX30</div>
+    </div>
+    <div class="top-right">
+      <span class="live-pill" id="apiStatus"><span class="blip"></span>menghubungkan...</span>
+      <button class="theme-toggle" id="themeToggle">Mode Gelap</button>
+    </div>
+  </header>
+
+  <nav class="tabs">
+    <button class="active" data-view="screener">Screener</button>
+    <button data-view="manual">Analisa Manual</button>
+    <button data-view="journal">Jurnal<span class="n" id="journalCount"></span></button>
+  </nav>
+
+  <!-- SCREENER -->
+  <section class="view active" id="view-screener">
+    <div class="controls">
+      <div class="field">
+        <label for="selIndex">Index</label>
+        <select id="selIndex"></select>
+      </div>
+      <div class="field">
+        <label for="selProvider">Provider</label>
+        <select id="selProvider"></select>
+      </div>
+      <div class="field">
+        <label for="selModel">Model</label>
+        <select id="selModel"></select>
+      </div>
+      <div class="field">
+        <label for="selPrompt">Strategi</label>
+        <select id="selPrompt"></select>
+      </div>
+      <div class="field">
+        <label for="inpEquity">Modal (Rp)</label>
+        <input type="text" id="inpEquity" value="9500000" inputmode="numeric">
+      </div>
+    </div>
+
+    <div class="field" id="customTickersField" style="display:none;background:var(--bg-raised);border:1px solid var(--border);padding:14px 16px;margin-bottom:20px;">
+      <label for="inpCustomTickers">Ticker Custom (pisahkan koma, tanpa .JK)</label>
+      <input type="text" id="inpCustomTickers" placeholder="BBCA, ANTM, MDKA">
+    </div>
+
+    <div class="run-row">
+      <button class="btn-primary" id="btnRunScreen">🚀 Jalankan Screening</button>
+      <label class="run-status" style="display:flex;align-items:center;gap:6px;">
+        Kandidat: <input type="text" id="inpTopN" value="8" style="width:36px;background:var(--bg-sunken);border:1px solid var(--border);color:var(--ink);font-family:ui-monospace,monospace;padding:3px 5px;">
+      </label>
+      <span class="run-status" id="screenStatus"></span>
+    </div>
+
+    <div class="section-head">
+      <h2>Kandidat</h2>
+      <p>geser untuk lihat semua &rarr;</p>
+    </div>
+
+    <div class="tape" id="tape">
+      <div class="empty-state" style="flex:1;">Belum ada hasil. Pilih index &amp; jalankan screening.</div>
+    </div>
+  </section>
+
+  <!-- MANUAL -->
+  <section class="view" id="view-manual">
+    <div class="controls" style="grid-template-columns:repeat(3,1fr);margin-bottom:26px;">
+      <div class="field">
+        <label for="selProviderM">Provider</label>
+        <select id="selProviderM"></select>
+      </div>
+      <div class="field">
+        <label for="selModelM">Model</label>
+        <select id="selModelM"></select>
+      </div>
+      <div class="field">
+        <label for="selPromptM">Strategi</label>
+        <select id="selPromptM"></select>
+      </div>
+    </div>
+
+    <div class="upload-card">
+      <label for="fileChart">Screenshot Chart</label>
+      <input type="file" id="fileChart" accept="image/png,image/jpeg">
+      <img id="preview" alt="preview">
+      <label for="inpTicker">Ticker (opsional)</label>
+      <input type="text" id="inpTicker" placeholder="mis. BBCA">
+      <button class="btn-primary" id="btnAnalyzeManual">🚀 Jalankan Analisa</button>
+    </div>
+
+    <div id="manualResultWrap" style="display:none;">
+      <div class="section-head"><h2>Hasil Analisa</h2></div>
+      <div class="manual-result" id="manualResult"></div>
+    </div>
+  </section>
+
+  <!-- JOURNAL -->
+  <section class="view" id="view-journal">
+    <div class="section-head">
+      <h2>Riwayat &amp; tracking manual</h2>
+      <p>diisi setelah eksekusi di Stockbit</p>
+    </div>
+    <div style="overflow-x:auto;">
+      <table class="ledger">
+        <thead>
+          <tr>
+            <th>Tanggal</th><th>Ticker</th><th>Strategi</th><th>Status</th>
+            <th class="num">Entry</th><th class="num">Exit</th><th class="num">Qty</th><th class="num">P/L</th><th></th>
+          </tr>
+        </thead>
+        <tbody id="journalBody"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <footer class="note">PITA — data pasar via Yahoo Finance, analisa via Claude/Gemini. Bukan rekomendasi investasi.</footer>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
