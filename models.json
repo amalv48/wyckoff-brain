@@ -1,5 +1,13 @@
-[
-    "gemini-3-flash-preview",
-    "gemini-1.5-flash",
-    "gemini-1.5-pro"
-]
+{
+    "Claude": {
+        "Sonnet 5 (balanced, recommended)": "claude-sonnet-5",
+        "Opus 4.8 (most capable)": "claude-opus-4-8",
+        "Haiku 4.5 (fastest/cheapest)": "claude-haiku-4-5",
+        "Fable 5 (deepest reasoning)": "claude-fable-5"
+    },
+    "Gemini": {
+        "Gemini 3 Flash Preview": "gemini-3-flash-preview",
+        "Gemini 1.5 Flash": "gemini-1.5-flash",
+        "Gemini 1.5 Pro": "gemini-1.5-pro"
+    }
+}

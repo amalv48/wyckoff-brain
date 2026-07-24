@@ -1,0 +1,16 @@
+{
+    "_note": "IDX rebalances LQ45 and IDX30 twice a year (Jan and Jul). These lists are a best-effort approximation of major constituents and WILL drift out of date. Verify against the current IDX factsheet before relying on them, and use 'Custom' to maintain your own accurate list.",
+    "LQ45": [
+        "BBCA", "BBRI", "BMRI", "BBNI", "TLKM", "ASII", "UNVR", "ICBP", "INDF", "KLBF",
+        "ANTM", "ADRO", "PTBA", "ITMG", "INCO", "MDKA", "PGAS", "SMGR", "INTP", "CPIN",
+        "JPFA", "AKRA", "EXCL", "ISAT", "TOWR", "TBIG", "MNCN", "SCMA", "GGRM", "HMSP",
+        "UNTR", "AMMN", "BRPT", "TPIA", "MEDC", "CTRA", "SMRA", "BSDE", "PWON", "ACES",
+        "MAPI", "ERAA", "ARTO", "BUKA", "GOTO"
+    ],
+    "IDX30": [
+        "BBCA", "BBRI", "BMRI", "BBNI", "TLKM", "ASII", "UNVR", "ICBP", "INDF", "KLBF",
+        "ANTM", "ADRO", "PTBA", "INCO", "MDKA", "PGAS", "SMGR", "INTP", "CPIN", "AKRA",
+        "EXCL", "TOWR", "MNCN", "GGRM", "HMSP", "UNTR", "AMMN", "BRPT", "TPIA", "MEDC"
+    ],
+    "Custom": []
+}

@@ -1,4 +1,7 @@
 streamlit
 google-generativeai>=0.8.3
+anthropic>=0.68.0
 Pillow
-st-gsheets-connection
+yfinance
+mplfinance
+pandas
