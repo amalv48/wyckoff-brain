@@ -144,6 +144,7 @@
     const rows = [
       ["Phase", plan.phase || "—", ""],
       ["Entry", plan.entry_low != null && plan.entry_high != null ? `${plan.entry_low}–${plan.entry_high}` : "—", ""],
+      ["Lot", plan.lots != null ? `${plan.lots} lot` : "—", ""],
       ["Stop", plan.stop_loss ?? "—", ""],
       ["Loss at Stop", formatRp(plan.loss_at_stop_rp), "loss"],
       ["Target", plan.target ?? "—", ""],

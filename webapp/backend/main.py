@@ -127,6 +127,47 @@ def add_notional_pnl(plan, equity):
     return plan
 
 
+# Must match the fee percentages stated in every prompts.json strategy
+# ("Buy fee 0.15 percent, sell fee 0.25 percent").
+BUY_FEE_PCT = 0.0015
+SELL_FEE_PCT = 0.0025
+# IDX board lot size: 100 shares per lot, uniform across all listed stocks,
+# in effect since 6 January 2014 (previously 500). No fractional-lot buying
+# on the regular market.
+IDX_SHARES_PER_LOT = 100
+
+
+def add_lot_sizing(plan, equity):
+    """How many lots to buy, sized from the risk budget already computed in
+    add_notional_pnl (loss_at_stop_rp), using the worst-case entry price
+    (entry_high, per every strategy's own 'use the upper bound' rule) and
+    capped by what the equity can actually afford — risk-based sizing can
+    otherwise imply spending more than the account has, e.g. a high-priced
+    stock with a tight percentage stop."""
+    if plan is None:
+        return plan
+    entry = plan.get("entry_high")
+    stop = plan.get("stop_loss")
+    loss_at_stop_rp = plan.get("loss_at_stop_rp")
+    plan["lots"] = None
+    plan["shares"] = None
+    if entry is None or stop is None or loss_at_stop_rp is None or entry <= stop:
+        return plan
+
+    net_loss_per_share = entry * (1 + BUY_FEE_PCT) - stop * (1 - SELL_FEE_PCT)
+    if net_loss_per_share <= 0:
+        return plan
+
+    lots_by_risk = loss_at_stop_rp / (net_loss_per_share * IDX_SHARES_PER_LOT)
+    cost_per_lot = entry * (1 + BUY_FEE_PCT) * IDX_SHARES_PER_LOT
+    lots_by_capital = equity / cost_per_lot if cost_per_lot > 0 else 0
+
+    lots = int(min(lots_by_risk, lots_by_capital))
+    plan["lots"] = lots
+    plan["shares"] = lots * IDX_SHARES_PER_LOT
+    return plan
+
+
 def format_equity(value):
     """The prompts are in English but the equity is always Indonesian Rupiah —
     a bare number reads as USD to the model, so spell out the currency."""
@@ -236,6 +277,7 @@ def run_screen(req: ScreenRequest):
         try:
             analysis, plan = call_structured(req.provider, req.model_id, prompt, image=chart_img)
             plan = add_notional_pnl(plan, req.equity)
+            plan = add_lot_sizing(plan, req.equity)
         except Exception as e:
             analysis = f"Analysis failed: {e}"
 
@@ -290,6 +332,7 @@ async def analyze_manual(
     try:
         analysis, plan = call_structured(provider, model_id, final_prompt, image=img)
         plan = add_notional_pnl(plan, equity)
+        plan = add_lot_sizing(plan, equity)
     except Exception as e:
         raise HTTPException(502, f"Analysis failed: {e}")
 
