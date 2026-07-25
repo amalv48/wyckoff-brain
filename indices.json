@@ -1,16 +1,16 @@
 {
-    "_note": "IDX rebalances LQ45 and IDX30 twice a year (Jan and Jul). These lists are a best-effort approximation of major constituents and WILL drift out of date. Verify against the current IDX factsheet before relying on them, and use 'Custom' to maintain your own accurate list.",
+    "_note": "IDX rebalances LQ45 and IDX30 twice a year (Jan and Jul). LQ45/IDX30 below were reconstructed and cross-checked for the 4 May - 31 Jul 2026 period (rebalance-delta chaining across multiple independent sources, not a verbatim official fetch) - see indices.json git history for full provenance. They WILL drift out of date after the next rebalance. Verify against the current IDX factsheet before relying on them, and use 'Custom' to maintain your own accurate list.",
     "LQ45": [
-        "BBCA", "BBRI", "BMRI", "BBNI", "TLKM", "ASII", "UNVR", "ICBP", "INDF", "KLBF",
-        "ANTM", "ADRO", "PTBA", "ITMG", "INCO", "MDKA", "PGAS", "SMGR", "INTP", "CPIN",
-        "JPFA", "AKRA", "EXCL", "ISAT", "TOWR", "TBIG", "MNCN", "SCMA", "GGRM", "HMSP",
-        "UNTR", "AMMN", "BRPT", "TPIA", "MEDC", "CTRA", "SMRA", "BSDE", "PWON", "ACES",
-        "MAPI", "ERAA", "ARTO", "BUKA", "GOTO"
+        "AADI", "ADMR", "ADRO", "AKRA", "AMMN", "AMRT", "ANTM", "ASII", "BBCA", "BBNI",
+        "BBRI", "BBTN", "BMRI", "BRPT", "BUMI", "CPIN", "CUAN", "DEWA", "EMTK", "ESSA",
+        "EXCL", "GOTO", "HRTA", "ICBP", "INCO", "INDF", "INKP", "ISAT", "ITMG", "JPFA",
+        "KLBF", "MAPI", "MBMA", "MDKA", "MEDC", "PGAS", "PGEO", "PTBA", "SCMA", "SMGR",
+        "TLKM", "TOWR", "UNTR", "UNVR", "WIFI"
     ],
     "IDX30": [
-        "BBCA", "BBRI", "BMRI", "BBNI", "TLKM", "ASII", "UNVR", "ICBP", "INDF", "KLBF",
-        "ANTM", "ADRO", "PTBA", "INCO", "MDKA", "PGAS", "SMGR", "INTP", "CPIN", "AKRA",
-        "EXCL", "TOWR", "MNCN", "GGRM", "HMSP", "UNTR", "AMMN", "BRPT", "TPIA", "MEDC"
+        "AADI", "ADMR", "ADRO", "AMRT", "ANTM", "ASII", "BBCA", "BBNI", "BBRI", "BMRI",
+        "BRPT", "BUMI", "CPIN", "EMTK", "GOTO", "ICBP", "INCO", "INDF", "INKP", "JPFA",
+        "KLBF", "MBMA", "MDKA", "MEDC", "PGAS", "PGEO", "PTBA", "TLKM", "UNTR", "UNVR"
     ],
     "Custom": []
 }
