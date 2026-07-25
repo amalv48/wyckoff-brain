@@ -60,6 +60,25 @@ ANALYSIS_SCHEMA = {
         "target": {"type": ["number", "null"]},
         "rrr": {"type": ["number", "null"], "description": "Reward-to-risk ratio, e.g. 2.5 for 1:2.5."},
         "risk_pct": {"type": ["number", "null"], "description": "Position risk as a percent of equity, e.g. 1.5."},
+        "action": {
+            "anyOf": [
+                {"type": "string", "enum": ["BUY", "HOLD", "SELL"]},
+                {"type": "null"},
+            ],
+            "description": (
+                "Recommended next action. Use null if verdict is NO_SETUP "
+                "and no existing position is described (no recommendation "
+                "to give). Use BUY if verdict is SETUP and no existing "
+                "position is described. If an existing position IS "
+                "described in the context, choose BUY (add to it) / HOLD "
+                "(keep it unchanged) / SELL (exit some or all of it) based "
+                "on this strategy's technical read of the position (has "
+                "the stop been violated, has the target been reached, is "
+                "the thesis still intact?) — not on the unrealized P/L "
+                "alone, and independent of the verdict field, which only "
+                "describes fresh-entry validity."
+            ),
+        },
         "narrative_markdown": {
             "type": "string",
             "description": (
@@ -75,7 +94,7 @@ ANALYSIS_SCHEMA = {
     },
     "required": [
         "verdict", "phase", "entry_low", "entry_high", "stop_loss",
-        "target", "rrr", "risk_pct", "narrative_markdown",
+        "target", "rrr", "risk_pct", "action", "narrative_markdown",
     ],
     "additionalProperties": False,
 }
@@ -103,7 +122,7 @@ def call_structured(provider, model_id, prompt, image=None):
         narrative = _fix_double_escaped_newlines(parsed.get("narrative_markdown") or raw)
         plan = {k: parsed.get(k) for k in (
             "verdict", "phase", "entry_low", "entry_high",
-            "stop_loss", "target", "rrr", "risk_pct",
+            "stop_loss", "target", "rrr", "risk_pct", "action",
         )}
         return narrative, plan
     except (json.JSONDecodeError, AttributeError):
@@ -166,6 +185,43 @@ def add_lot_sizing(plan, equity):
     plan["lots"] = lots
     plan["shares"] = lots * IDX_SHARES_PER_LOT
     return plan
+
+
+def compute_position_pnl(lots, avg_price, current_price):
+    """Unrealized P/L for a position the user already holds, net of the same
+    buy/sell fees used everywhere else — computed in Python from a real
+    fetched price, never left to the AI to estimate off a chart."""
+    if not lots or not avg_price or current_price is None:
+        return None
+    shares = lots * IDX_SHARES_PER_LOT
+    cost_basis = shares * avg_price * (1 + BUY_FEE_PCT)
+    current_value = shares * current_price * (1 - SELL_FEE_PCT)
+    pnl_rp = round(current_value - cost_basis, 2)
+    return {
+        "shares": shares,
+        "cost_basis_rp": round(cost_basis, 2),
+        "current_value_rp": round(current_value, 2),
+        "pnl_rp": pnl_rp,
+        "pnl_pct": round(pnl_rp / cost_basis * 100, 2) if cost_basis else None,
+    }
+
+
+def build_position_context(ticker, lots, avg_price, current_price, position_pnl):
+    """Appended after the strategy prompt is formatted, only when a position
+    is described — keeps position-awareness in one place instead of editing
+    all 5 prompts.json strategies."""
+    if not lots or not avg_price or position_pnl is None:
+        return ""
+    return (
+        f"\n\nEXISTING POSITION CONTEXT:\n"
+        f"The user currently holds {lots} lot ({position_pnl['shares']} shares) of "
+        f"{ticker or 'this stock'} at an average price of {format_equity(avg_price)}. "
+        f"Current price is {format_equity(current_price)}. Unrealized P/L, net of "
+        f"buy/sell fees, is {format_equity(position_pnl['pnl_rp'])} ({position_pnl['pnl_pct']}%).\n\n"
+        f"ADDITIONAL TASK: Recommend a next action for this existing position — "
+        f"BUY, HOLD, or SELL — per the action field's rules, based on this "
+        f"strategy's technical structure, not the unrealized P/L alone."
+    )
 
 
 def format_equity(value):
@@ -308,26 +364,49 @@ def run_screen(req: ScreenRequest):
 
 @app.post("/api/analyze")
 async def analyze_manual(
-    file: UploadFile = File(...),
+    file: Optional[UploadFile] = File(None),
     provider: str = Form(...),
     model_id: str = Form(...),
     prompt: str = Form(...),
     equity: float = Form(...),
     ticker: Optional[str] = Form(None),
+    lots: Optional[int] = Form(None),
+    avg_price: Optional[float] = Form(None),
 ):
     prompts = _load_json("prompts.json", {})
     if prompt not in prompts:
         raise HTTPException(400, f"Unknown prompt strategy: {prompt}")
     raw_prompt = prompts[prompt]
 
-    img_bytes = await file.read()
-    img = Image.open(io.BytesIO(img_bytes))
+    if not file and not ticker:
+        raise HTTPException(400, "Provide either a chart file or a ticker")
+
+    current_price = None
+    if file is not None:
+        img_bytes = await file.read()
+        img = Image.open(io.BytesIO(img_bytes))
+        if ticker:
+            data = screener.fetch_ohlcv([ticker])
+            if ticker in data:
+                current_price = float(data[ticker]["Close"].iloc[-1])
+    else:
+        data = screener.fetch_ohlcv([ticker])
+        if ticker not in data:
+            raise HTTPException(400, f"Could not fetch data for ticker {ticker}")
+        df = data[ticker]
+        img = screener.render_chart(df, ticker)
+        current_price = float(df["Close"].iloc[-1])
+
+    if (lots or avg_price) and current_price is None:
+        raise HTTPException(400, "A ticker is required to calculate P/L against your position")
 
     entries = journal_store.load()
     last_entries = [e for e in entries if ticker and e.get("ticker") == ticker]
     last_analisa = last_entries[-1]["analysis"] if last_entries else "No prior analysis available."
 
+    position_pnl = compute_position_pnl(lots, avg_price, current_price)
     final_prompt = raw_prompt.format(last_analisa=last_analisa, equity=format_equity(equity))
+    final_prompt += build_position_context(ticker, lots, avg_price, current_price, position_pnl)
 
     try:
         analysis, plan = call_structured(provider, model_id, final_prompt, image=img)
@@ -348,6 +427,7 @@ async def analyze_manual(
         "analysis_html": render_markdown(analysis),
         "journal_id": saved["id"],
         "plan": plan,
+        "position_pnl": position_pnl,
     }
 
 

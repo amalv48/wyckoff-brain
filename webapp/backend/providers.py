@@ -10,12 +10,23 @@ def _image_to_b64_png(img):
 
 
 def _to_gemini_schema(schema):
-    """The installed google-generativeai SDK (0.8.x) doesn't understand the
-    standard JSON Schema `"type": ["number", "null"]` union form used for
-    nullable fields — it wants `"type": "number", "nullable": true` instead.
-    Recursively rewrite a schema written in the standard form into that
-    dialect so one canonical schema can drive both providers."""
+    """The installed google-generativeai SDK (0.8.x) doesn't understand
+    standard JSON Schema nullable forms — neither `"type": ["number", "null"]`
+    unions nor `"anyOf": [{...}, {"type": "null"}]` (used for nullable enums,
+    since Claude's structured-output validator rejects a `type` array
+    combined with `enum`). It wants `"type": "number", "nullable": true`
+    instead. Recursively rewrite a schema written in the standard form into
+    that dialect so one canonical schema can drive both providers."""
     if isinstance(schema, dict):
+        any_of = schema.get("anyOf")
+        if isinstance(any_of, list) and len(any_of) == 2 and {"type": "null"} in any_of:
+            concrete = next(b for b in any_of if b != {"type": "null"})
+            merged = {k: v for k, v in schema.items() if k != "anyOf"}
+            merged.update(concrete)
+            out = _to_gemini_schema(merged)
+            out["nullable"] = True
+            return out
+
         out = {k: _to_gemini_schema(v) for k, v in schema.items() if k != "additionalProperties"}
         type_val = schema.get("type")
         if isinstance(type_val, list):

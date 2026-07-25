@@ -91,12 +91,36 @@
       </div>
     </div>
 
+    <div class="mode-toggle">
+      <button type="button" class="mode-btn active" data-mode="ticker">By Ticker</button>
+      <button type="button" class="mode-btn" data-mode="upload">Upload Chart</button>
+    </div>
+
     <div class="upload-card">
-      <label for="fileChart">Chart Screenshot</label>
-      <input type="file" id="fileChart" accept="image/png,image/jpeg">
-      <img id="preview" alt="preview">
-      <label for="inpTicker">Ticker (optional)</label>
+      <label for="inpTicker" id="lblTicker">Ticker</label>
       <input type="text" id="inpTicker" placeholder="e.g. BBCA">
+      <p class="field-hint" id="tickerHint">We'll fetch the chart and current price automatically.</p>
+
+      <div id="uploadModeField" style="display:none;">
+        <label for="fileChart">Chart Screenshot</label>
+        <input type="file" id="fileChart" accept="image/png,image/jpeg">
+        <img id="preview" alt="preview">
+      </div>
+
+      <div class="position-fields">
+        <label class="field-hint position-heading">My Position (optional)</label>
+        <div class="position-row">
+          <div>
+            <label for="inpPositionLots">Lots Held</label>
+            <input type="number" id="inpPositionLots" placeholder="0" min="0" step="1">
+          </div>
+          <div>
+            <label for="inpPositionAvgPrice">Average Price (Rp)</label>
+            <input type="text" id="inpPositionAvgPrice" placeholder="0" inputmode="numeric">
+          </div>
+        </div>
+      </div>
+
       <button class="btn-primary" id="btnAnalyzeManual">🚀 Run Analysis</button>
     </div>
 

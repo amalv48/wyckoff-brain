@@ -24,24 +24,25 @@
     return digits ? Number(digits).toLocaleString("en-US") : "";
   }
 
-  // ---------- capital input: auto-format with thousands commas ----------
-  const equityInput = $("inpEquity");
-  function reformatEquity() {
-    const digitsBeforeCursor = digitsOnly(equityInput.value.slice(0, equityInput.selectionStart));
-    equityInput.value = formatThousands(digitsOnly(equityInput.value));
-    let pos = 0, seen = 0;
-    while (pos < equityInput.value.length && seen < digitsBeforeCursor.length) {
-      if (/\d/.test(equityInput.value[pos])) seen++;
-      pos++;
+  // ---------- thousands-comma input formatting (reused for any Rp field) ----------
+  function attachThousandsFormatter(inputEl) {
+    function reformat() {
+      const digitsBeforeCursor = digitsOnly(inputEl.value.slice(0, inputEl.selectionStart));
+      inputEl.value = formatThousands(digitsOnly(inputEl.value));
+      let pos = 0, seen = 0;
+      while (pos < inputEl.value.length && seen < digitsBeforeCursor.length) {
+        if (/\d/.test(inputEl.value[pos])) seen++;
+        pos++;
+      }
+      inputEl.setSelectionRange(pos, pos);
     }
-    equityInput.setSelectionRange(pos, pos);
+    inputEl.addEventListener("input", reformat);
+    inputEl.value = formatThousands(digitsOnly(inputEl.value));
+    return () => parseFloat(digitsOnly(inputEl.value)) || 0;
   }
-  equityInput.addEventListener("input", reformatEquity);
-  equityInput.value = formatThousands(digitsOnly(equityInput.value));
 
-  function parseEquity() {
-    return parseFloat(digitsOnly(equityInput.value)) || 0;
-  }
+  const parseEquity = attachThousandsFormatter($("inpEquity"));
+  const parsePositionAvgPrice = attachThousandsFormatter($("inpPositionAvgPrice"));
 
   // ---------- theme ----------
   const root = document.documentElement;
@@ -138,6 +139,12 @@
     return "weak";
   }
 
+  function actionBadgeHtml(action) {
+    if (!action) return "";
+    const cls = action === "BUY" ? "action-buy" : action === "SELL" ? "action-sell" : "action-hold";
+    return `<span class="verdict ${cls}">${escapeHtml(action)}</span>`;
+  }
+
   function planHtml(plan) {
     if (!plan) return "";
     const isSetup = plan.verdict === "SETUP";
@@ -155,6 +162,25 @@
     return `
       <div class="plan-stats">
         <span class="verdict ${isSetup ? "setup" : "no-setup"}">${isSetup ? "Setup" : "No Setup"}</span>
+        ${actionBadgeHtml(plan.action)}
+        <div class="plan-grid mono">
+          ${rows.map(([k, v, cls]) => `<div class="plan-cell"><span>${k}</span><b class="${cls}">${escapeHtml(String(v))}</b></div>`).join("")}
+        </div>
+      </div>`;
+  }
+
+  function positionHtml(position) {
+    if (!position) return "";
+    const rows = [
+      ["Shares", position.shares, ""],
+      ["Cost Basis", formatRp(position.cost_basis_rp), ""],
+      ["Current Value", formatRp(position.current_value_rp), ""],
+      ["Unrealized P/L", formatRp(position.pnl_rp), position.pnl_rp >= 0 ? "gain" : "loss"],
+      ["P/L %", position.pnl_pct != null ? `${position.pnl_pct}%` : "—", position.pnl_pct >= 0 ? "gain" : "loss"],
+    ];
+    return `
+      <div class="plan-stats">
+        <span class="verdict no-setup">My Position</span>
         <div class="plan-grid mono">
           ${rows.map(([k, v, cls]) => `<div class="plan-cell"><span>${k}</span><b class="${cls}">${escapeHtml(String(v))}</b></div>`).join("")}
         </div>
@@ -276,6 +302,21 @@
   });
 
   // ---------- manual analysis ----------
+  let manualMode = "ticker";
+  document.querySelectorAll(".mode-toggle .mode-btn").forEach((b) => {
+    b.addEventListener("click", () => {
+      manualMode = b.dataset.mode;
+      document.querySelectorAll(".mode-toggle .mode-btn").forEach((x) => x.classList.remove("active"));
+      b.classList.add("active");
+      $("uploadModeField").style.display = manualMode === "upload" ? "block" : "none";
+      $("lblTicker").textContent = manualMode === "ticker" ? "Ticker" : "Ticker (optional, needed for P/L)";
+      $("tickerHint").textContent =
+        manualMode === "ticker"
+          ? "We'll fetch the chart and current price automatically."
+          : "Upload your own chart screenshot below. Add a ticker too if you want P/L against your position.";
+    });
+  });
+
   $("fileChart").addEventListener("change", () => {
     const file = $("fileChart").files[0];
     if (!file) return;
@@ -285,24 +326,39 @@
   });
 
   $("btnAnalyzeManual").addEventListener("click", async () => {
-    const file = $("fileChart").files[0];
-    if (!file) {
+    const ticker = $("inpTicker").value.trim().toUpperCase();
+    const file = manualMode === "upload" ? $("fileChart").files[0] : null;
+    const lots = parseInt($("inpPositionLots").value, 10) || 0;
+    const avgPrice = parsePositionAvgPrice();
+
+    if (manualMode === "ticker" && !ticker) {
+      alert("Please enter a ticker.");
+      return;
+    }
+    if (manualMode === "upload" && !file) {
       alert("Please upload a chart screenshot first.");
       return;
     }
+    if ((lots || avgPrice) && !ticker) {
+      alert("A ticker is required to calculate P/L against your position.");
+      return;
+    }
+
     const btn = $("btnAnalyzeManual");
     btn.disabled = true;
     btn.innerHTML = '<span class="spinner spinner-inline"></span> Analyzing...';
     $("manualResultWrap").style.display = "block";
-    $("manualResult").innerHTML = '<div class="empty-state processing"><span class="spinner"></span> Analyzing chart...</div>';
+    $("manualResult").innerHTML = '<div class="empty-state processing"><span class="spinner"></span> Analyzing...</div>';
 
     const form = new FormData();
-    form.append("file", file);
+    if (file) form.append("file", file);
     form.append("provider", $("selProviderM").value);
     form.append("model_id", $("selModelM").value);
     form.append("prompt", $("selPromptM").value);
     form.append("equity", parseEquity());
-    form.append("ticker", $("inpTicker").value.trim().toUpperCase());
+    form.append("ticker", ticker);
+    if (lots) form.append("lots", lots);
+    if (avgPrice) form.append("avg_price", avgPrice);
 
     try {
       const res = await fetch("/api/analyze", { method: "POST", body: form });
@@ -312,7 +368,7 @@
       }
       const data = await res.json();
       $("manualResultWrap").style.display = "block";
-      $("manualResult").innerHTML = planHtml(data.plan) + data.analysis_html;
+      $("manualResult").innerHTML = positionHtml(data.position_pnl) + planHtml(data.plan) + data.analysis_html;
       state.journal = await fetch("/api/journal").then((r) => r.json());
       renderJournal();
     } catch (e) {

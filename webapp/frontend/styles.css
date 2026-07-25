@@ -183,6 +183,9 @@ section.view.active { display: block; }
 }
 .verdict.setup { background: var(--gain-soft); color: var(--gain); }
 .verdict.no-setup { background: var(--bg-sunken); color: var(--ink-faint); }
+.verdict.action-buy { background: var(--gain-soft); color: var(--gain); margin-left: 6px; }
+.verdict.action-sell { background: var(--loss-soft); color: var(--loss); margin-left: 6px; }
+.verdict.action-hold { background: var(--bg-sunken); color: var(--ink-dim); margin-left: 6px; }
 .plan-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; background: var(--border); border: 1px solid var(--border); margin-bottom: 4px; }
 .plan-cell { background: var(--bg-raised); padding: 6px 6px; display: flex; flex-direction: column; gap: 2px; }
 .plan-cell span { font-size: 9px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-faint); }
@@ -253,9 +256,21 @@ section.view.active { display: block; }
 .spinner-inline { margin-right: 2px; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
+.mode-toggle { display: flex; gap: 2px; margin-bottom: 14px; }
+.mode-toggle .mode-btn {
+  font-family: ui-monospace, monospace; font-size: 12px; letter-spacing: 0.05em; text-transform: uppercase;
+  background: var(--bg-raised); border: 1px solid var(--border); color: var(--ink-faint); padding: 8px 14px; cursor: pointer;
+}
+.mode-toggle .mode-btn.active { color: var(--ink); border-color: var(--accent); background: var(--accent-soft); }
+
+.field-hint { font-size: 12px; color: var(--ink-faint); font-style: italic; margin: -10px 0 16px; }
+.position-fields { border-top: 1px dashed var(--border); padding-top: 14px; margin-top: 4px; }
+.position-heading { margin-bottom: 4px !important; }
+.position-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+
 .upload-card { background: var(--bg-raised); border: 1px solid var(--border); padding: 22px; margin-bottom: 26px; max-width: 560px; }
 .upload-card label { display: block; font-family: ui-monospace, monospace; font-size: 10.5px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-faint); margin-bottom: 8px; }
-.upload-card input[type="file"], .upload-card input[type="text"] {
+.upload-card input[type="file"], .upload-card input[type="text"], .upload-card input[type="number"] {
   width: 100%; font-family: ui-monospace, monospace; font-size: 13.5px; background: var(--bg-sunken);
   border: 1px solid var(--border); color: var(--ink); padding: 9px 10px; margin-bottom: 16px;
 }
