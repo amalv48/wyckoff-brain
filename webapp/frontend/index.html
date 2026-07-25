@@ -24,6 +24,7 @@
     <button class="active" data-view="screener">Screener</button>
     <button data-view="manual">Manual Analysis</button>
     <button data-view="journal">Journal<span class="n" id="journalCount"></span></button>
+    <button data-view="automation">Automation</button>
   </nav>
 
   <!-- SCREENER -->
@@ -146,6 +147,58 @@
         </thead>
         <tbody id="journalBody"></tbody>
       </table>
+    </div>
+  </section>
+
+  <!-- AUTOMATION -->
+  <section class="view" id="view-automation">
+    <div class="section-head">
+      <h2>Automated Screening</h2>
+      <p>runs hourly in the background, only notifies you on actual setups</p>
+    </div>
+
+    <div class="upload-card" style="max-width:720px;">
+      <label class="field-hint" style="margin:0 0 16px;display:flex;align-items:center;gap:8px;">
+        <input type="checkbox" id="autoEnabled" style="width:auto;margin:0;"> Enable automated screening
+      </label>
+
+      <label>Run Hours (WIB)</label>
+      <p class="field-hint">Times snap to the hour — the scheduler's minimum interval is 1 hour. Covers IDX pre-open (08:45) through close (15:49/16:05 auction).</p>
+      <div class="choice-grid" id="autoHours"></div>
+
+      <div class="controls" style="grid-template-columns:repeat(2,1fr);margin:20px 0;">
+        <div class="field">
+          <label for="autoIndex">Index</label>
+          <select id="autoIndex"></select>
+        </div>
+        <div class="field">
+          <label for="autoProvider">Provider</label>
+          <select id="autoProvider"></select>
+        </div>
+        <div class="field">
+          <label for="autoModel">Model</label>
+          <select id="autoModel"></select>
+        </div>
+        <div class="field">
+          <label for="autoTopN">Candidates per strategy</label>
+          <input type="text" id="autoTopN" value="4" style="width:100%;background:none;border:none;color:var(--ink);font-family:ui-monospace,monospace;font-size:14px;padding:0;">
+        </div>
+      </div>
+
+      <div class="field" id="autoCustomTickersField" style="display:none;background:var(--bg-sunken);border:1px solid var(--border);padding:14px 16px;margin-bottom:16px;">
+        <label for="autoCustomTickers">Custom Tickers (comma-separated, without .JK)</label>
+        <input type="text" id="autoCustomTickers" placeholder="BBCA, ANTM, MDKA">
+      </div>
+
+      <label>Strategies</label>
+      <p class="field-hint">Each strategy ticked is a fully separate screening pass — cost scales with how many you pick.</p>
+      <div class="choice-grid" id="autoStrategies"></div>
+
+      <label for="autoEquity">Capital (Rp)</label>
+      <input type="text" id="autoEquity" value="9500000" inputmode="numeric">
+
+      <button class="btn-primary" id="btnSaveAutomation" style="margin-top:8px;">💾 Save Settings</button>
+      <span class="run-status" id="automationStatus" style="margin-left:12px;"></span>
     </div>
   </section>
 

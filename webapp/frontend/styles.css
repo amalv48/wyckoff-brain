@@ -264,6 +264,15 @@ section.view.active { display: block; }
 .mode-toggle .mode-btn.active { color: var(--ink); border-color: var(--accent); background: var(--accent-soft); }
 
 .field-hint { font-size: 12px; color: var(--ink-faint); font-style: italic; margin: -10px 0 16px; }
+
+.choice-grid { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 18px; }
+.choice-chip {
+  font-family: ui-monospace, monospace; font-size: 12px; letter-spacing: 0.03em;
+  background: var(--bg-sunken); border: 1px solid var(--border); color: var(--ink-dim);
+  padding: 6px 11px; cursor: pointer; user-select: none; display: inline-flex; align-items: center; gap: 6px;
+}
+.choice-chip input { margin: 0; width: auto; }
+.choice-chip.checked { color: var(--ink); border-color: var(--accent); background: var(--accent-soft); }
 .position-fields { border-top: 1px dashed var(--border); padding-top: 14px; margin-top: 4px; }
 .position-heading { margin-bottom: 4px !important; }
 .position-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }

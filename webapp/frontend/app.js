@@ -43,6 +43,7 @@
 
   const parseEquity = attachThousandsFormatter($("inpEquity"));
   const parsePositionAvgPrice = attachThousandsFormatter($("inpPositionAvgPrice"));
+  const parseAutoEquity = attachThousandsFormatter($("autoEquity"));
 
   // ---------- theme ----------
   const root = document.documentElement;
@@ -81,6 +82,111 @@
     refreshModels();
   }
 
+  // ---------- automation ----------
+  const AUTO_HOURS = [7, 8, 9, 10, 11, 12, 13, 14, 15, 16];
+
+  function wibLabel(h) {
+    return String(h).padStart(2, "0") + ":00";
+  }
+
+  function toggleChip(cb) {
+    cb.closest(".choice-chip").classList.toggle("checked", cb.checked);
+  }
+
+  async function initAutomation() {
+    populateProviderModel("autoProvider", "autoModel");
+
+    $("autoIndex").innerHTML = state.indices.names
+      .map((n) => `<option value="${escapeHtml(n)}">${escapeHtml(n)}${n !== "Custom" ? " (" + state.indices.tickers[n].length + ")" : ""}</option>`)
+      .join("");
+    $("autoIndex").addEventListener("change", () => {
+      $("autoCustomTickersField").style.display = $("autoIndex").value === "Custom" ? "block" : "none";
+    });
+
+    $("autoHours").innerHTML = AUTO_HOURS.map(
+      (h) => `<label class="choice-chip"><input type="checkbox" value="${h}"> ${wibLabel(h)}</label>`
+    ).join("");
+    $("autoHours").querySelectorAll("input[type=checkbox]").forEach((cb) => {
+      cb.addEventListener("change", () => toggleChip(cb));
+    });
+
+    $("autoStrategies").innerHTML = state.prompts.map(
+      (p) => `<label class="choice-chip"><input type="checkbox" value="${escapeHtml(p)}"> ${escapeHtml(p)}</label>`
+    ).join("");
+    $("autoStrategies").querySelectorAll("input[type=checkbox]").forEach((cb) => {
+      cb.addEventListener("change", () => toggleChip(cb));
+    });
+
+    try {
+      const res = await fetch("/api/automation/settings");
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).detail || res.statusText);
+      const settings = await res.json();
+
+      $("autoEnabled").checked = !!settings.enabled;
+      $("autoIndex").value = settings.index_name || "LQ45";
+      $("autoCustomTickersField").style.display = $("autoIndex").value === "Custom" ? "block" : "none";
+      $("autoCustomTickers").value = (settings.custom_tickers || []).join(", ");
+      $("autoProvider").value = settings.provider || "Claude";
+      $("autoProvider").dispatchEvent(new Event("change"));
+      $("autoModel").value = settings.model_id || "";
+      $("autoTopN").value = settings.top_n ?? 4;
+      $("autoEquity").value = settings.equity ?? 9500000;
+      $("autoEquity").dispatchEvent(new Event("input"));
+
+      const activeHours = new Set(settings.hours_wib || []);
+      $("autoHours").querySelectorAll("input[type=checkbox]").forEach((cb) => {
+        cb.checked = activeHours.has(parseInt(cb.value, 10));
+        toggleChip(cb);
+      });
+      const activeStrategies = new Set(settings.strategies || []);
+      $("autoStrategies").querySelectorAll("input[type=checkbox]").forEach((cb) => {
+        cb.checked = activeStrategies.has(cb.value);
+        toggleChip(cb);
+      });
+    } catch (e) {
+      $("automationStatus").textContent = "Settings unavailable: " + e.message;
+    }
+  }
+
+  $("btnSaveAutomation").addEventListener("click", async () => {
+    const btn = $("btnSaveAutomation");
+    btn.disabled = true;
+    $("automationStatus").textContent = "Saving...";
+
+    const hours_wib = Array.from($("autoHours").querySelectorAll("input:checked")).map((cb) => parseInt(cb.value, 10));
+    const strategies = Array.from($("autoStrategies").querySelectorAll("input:checked")).map((cb) => cb.value);
+    const customTickers = $("autoCustomTickers").value.split(",").map((t) => t.trim().toUpperCase()).filter(Boolean);
+
+    const payload = {
+      enabled: $("autoEnabled").checked,
+      hours_wib,
+      index_name: $("autoIndex").value,
+      custom_tickers: $("autoIndex").value === "Custom" ? customTickers : [],
+      strategies,
+      provider: $("autoProvider").value,
+      model_id: $("autoModel").value,
+      equity: parseAutoEquity(),
+      top_n: parseInt($("autoTopN").value, 10) || 4,
+    };
+
+    try {
+      const res = await fetch("/api/automation/settings", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || res.statusText);
+      }
+      $("automationStatus").textContent = "Saved ✓";
+    } catch (e) {
+      $("automationStatus").textContent = "Failed: " + e.message;
+    } finally {
+      btn.disabled = false;
+    }
+  });
+
   // ---------- version footer ----------
   async function loadVersion() {
     try {
@@ -97,16 +203,18 @@
   // ---------- init ----------
   async function init() {
     try {
-      const [models, indices, prompts, journal] = await Promise.all([
+      // Core config (models/indices/prompts) must all load for the app to be
+      // usable at all. The journal is independently fetched — a Supabase
+      // hiccup there shouldn't take down the rest of the app (screener,
+      // manual analysis, automation settings all work without it).
+      const [models, indices, prompts] = await Promise.all([
         fetch("/api/models").then((r) => r.json()),
         fetch("/api/indices").then((r) => r.json()),
         fetch("/api/prompts").then((r) => r.json()),
-        fetch("/api/journal").then((r) => r.json()),
       ]);
       state.models = models;
       state.indices = indices;
       state.prompts = prompts.names;
-      state.journal = journal;
 
       $("apiStatus").innerHTML = '<span class="blip"></span>connected to backend';
 
@@ -124,7 +232,15 @@
       $("selPrompt").innerHTML = promptOptions;
       $("selPromptM").innerHTML = promptOptions;
 
+      try {
+        state.journal = await fetch("/api/journal").then((r) => r.json());
+      } catch (e) {
+        state.journal = [];
+        console.error("journal fetch failed:", e);
+      }
       renderJournal();
+
+      await initAutomation();
     } catch (e) {
       $("apiStatus").className = "live-pill err";
       $("apiStatus").innerHTML = '<span class="blip"></span>backend not connected';

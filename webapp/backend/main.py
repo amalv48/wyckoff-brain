@@ -2,7 +2,7 @@ import base64
 import io
 import json
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
@@ -15,6 +15,7 @@ from fastapi.staticfiles import StaticFiles
 from PIL import Image
 from pydantic import BaseModel
 
+import automation_store
 import journal_store
 import providers
 import screener
@@ -305,25 +306,27 @@ class ScreenRequest(BaseModel):
     equity: float
 
 
-@app.post("/api/screen")
-def run_screen(req: ScreenRequest):
+def run_screening(index, custom_tickers, top_n, provider, model_id, prompt_name, equity):
+    """Core screening logic, shared by the interactive /api/screen endpoint
+    and the automated /api/automation/tick endpoint — one implementation,
+    not two copies that could drift."""
     indices = screener.load_indices()
-    if req.index == "Custom":
-        tickers = req.custom_tickers or []
+    if index == "Custom":
+        tickers = custom_tickers or []
     else:
-        tickers = indices.get(req.index, [])
+        tickers = indices.get(index, [])
     if not tickers:
         raise HTTPException(400, "No tickers to screen")
 
     prompts = _load_json("prompts.json", {})
-    if req.prompt not in prompts:
-        raise HTTPException(400, f"Unknown prompt strategy: {req.prompt}")
-    raw_prompt = prompts[req.prompt]
-    scorer, max_score = screener.get_scorer(req.prompt)
+    if prompt_name not in prompts:
+        raise HTTPException(400, f"Unknown prompt strategy: {prompt_name}")
+    raw_prompt = prompts[prompt_name]
+    scorer, max_score = screener.get_scorer(prompt_name)
 
     data = screener.fetch_ohlcv(tickers)
     index_df = screener.fetch_index_reference()
-    candidates = screener.shortlist(data, top_n=req.top_n, index_df=index_df, scorer=scorer)
+    candidates = screener.shortlist(data, top_n=top_n, index_df=index_df, scorer=scorer)
 
     results = []
     for cand in candidates:
@@ -336,12 +339,12 @@ def run_screen(req: ScreenRequest):
             f"signals: {'; '.join(cand['signals'])}. "
             f"Last close price: {cand['last_close']}."
         )
-        prompt = raw_prompt.format(last_analisa=context_note, equity=format_equity(req.equity))
+        prompt = raw_prompt.format(last_analisa=context_note, equity=format_equity(equity))
         plan = None
         try:
-            analysis, plan = call_structured(req.provider, req.model_id, prompt, image=chart_img)
-            plan = add_notional_pnl(plan, req.equity)
-            plan = add_lot_sizing(plan, req.equity)
+            analysis, plan = call_structured(provider, model_id, prompt, image=chart_img)
+            plan = add_notional_pnl(plan, equity)
+            plan = add_lot_sizing(plan, equity)
         except Exception as e:
             analysis = f"Analysis failed: {e}"
 
@@ -366,6 +369,99 @@ def run_screen(req: ScreenRequest):
         "max_score": max_score,
         "candidates": results,
     }
+
+
+@app.post("/api/screen")
+def run_screen(req: ScreenRequest):
+    return run_screening(
+        req.index, req.custom_tickers, req.top_n, req.provider, req.model_id, req.prompt, req.equity
+    )
+
+
+# --- Automated screening ---
+#
+# One CCR Routine ticks this hourly (weekdays, WIB 07:00-16:00). Which hours
+# actually do anything, which index/strategies/model/capital to use, and
+# whether automation runs at all are all controlled by AutomationSettings
+# below — the Routine's own schedule never needs to change when these do.
+
+class AutomationSettings(BaseModel):
+    enabled: bool = False
+    hours_wib: list[int] = []
+    index_name: str = "LQ45"
+    custom_tickers: list[str] = []
+    strategies: list[str] = []
+    provider: str = "Claude"
+    model_id: str = "claude-sonnet-5"
+    equity: float = 10000000
+    top_n: int = 4
+
+
+@app.get("/api/automation/settings")
+def get_automation_settings():
+    try:
+        settings = automation_store.load()
+    except automation_store.SchemaNotReadyError as e:
+        raise HTTPException(503, str(e))
+    settings.pop("last_run_at", None)
+    return settings
+
+
+@app.put("/api/automation/settings")
+def put_automation_settings(req: AutomationSettings):
+    try:
+        return automation_store.save(req.model_dump())
+    except automation_store.SchemaNotReadyError as e:
+        raise HTTPException(503, str(e))
+
+
+@app.post("/api/automation/tick")
+def automation_tick():
+    """Called hourly by the CCR Routine. Reports {"due": false} with no
+    side effects unless this exact hour-slot is enabled and hasn't already
+    run today; only stocks the AI actually verdicts SETUP are returned, so
+    the caller can stay silent on empty results instead of notifying about
+    routine no-setup noise."""
+    try:
+        settings = automation_store.load()
+    except automation_store.SchemaNotReadyError as e:
+        raise HTTPException(503, str(e))
+
+    if not settings["enabled"] or not settings["strategies"]:
+        return {"due": False}
+
+    now_utc = datetime.now(timezone.utc)
+    wib_hour = (now_utc.hour + 7) % 24
+    hour_bucket = now_utc.replace(minute=0, second=0, microsecond=0)
+    if wib_hour not in settings["hours_wib"]:
+        return {"due": False}
+
+    last_run_at = settings.get("last_run_at")
+    if last_run_at:
+        last_bucket = datetime.fromisoformat(last_run_at.replace("Z", "+00:00")).replace(
+            minute=0, second=0, microsecond=0
+        )
+        if last_bucket == hour_bucket:
+            return {"due": False}  # already ran this hour-slot today
+
+    results = {}
+    for strategy in settings["strategies"]:
+        screen_result = run_screening(
+            settings["index_name"],
+            settings["custom_tickers"],
+            settings["top_n"],
+            settings["provider"],
+            settings["model_id"],
+            strategy,
+            settings["equity"],
+        )
+        results[strategy] = [
+            c for c in screen_result["candidates"]
+            if c.get("plan") is not None and c["plan"].get("verdict") == "SETUP"
+        ]
+
+    automation_store.mark_ticked()
+    return {"due": True, "results": results}
 
 
 # --- Manual chart analysis ---
