@@ -6,7 +6,16 @@ import streamlit as st
 from PIL import Image
 
 from providers import call_model
-from screener import MAX_SCORE, fetch_index_reference, fetch_ohlcv, load_indices, render_chart, shortlist
+from screener import (
+    MAX_SCORE,
+    fetch_index_reference,
+    fetch_ohlcv,
+    get_scorer,
+    load_indices,
+    render_chart,
+    shortlist,
+    warn_unmapped_strategies,
+)
 
 JOURNAL_PATH = "journal.json"
 
@@ -38,6 +47,7 @@ if "journal_memory" not in st.session_state:
 model_catalog = load_json_file("models.json", {"Claude": {"Sonnet 5": "claude-sonnet-5"}})
 prompt_options = load_json_file("prompts.json", {"Default": "Buat analisa Wyckoff dari {equity}."})
 indices = load_indices()
+warn_unmapped_strategies(prompt_options.keys())
 
 # --- 3. SIDEBAR (KONTROL MODULAR) ---
 with st.sidebar:
@@ -113,7 +123,8 @@ with tab_screener:
             if not data:
                 st.error("Gagal mengambil data harga. Coba lagi nanti.")
             else:
-                candidates = shortlist(data, top_n=top_n, index_df=index_df)
+                scorer, max_score = get_scorer(selected_prompt_key)
+                candidates = shortlist(data, top_n=top_n, index_df=index_df, scorer=scorer)
                 if not candidates:
                     st.info("Tidak ada kandidat yang lolos filter kuantitatif hari ini.")
                 st.session_state.screener_results = []
@@ -139,6 +150,7 @@ with tab_screener:
                         {
                             "ticker": ticker,
                             "score": cand["score"],
+                            "max_score": max_score,
                             "signals": cand["signals"],
                             "chart": chart_img,
                             "analysis": analysis,
@@ -146,7 +158,7 @@ with tab_screener:
                     )
 
     for i, result in enumerate(st.session_state.get("screener_results", [])):
-        with st.expander(f"📊 {result['ticker']} (skor kuantitatif: {result['score']}/{MAX_SCORE})"):
+        with st.expander(f"📊 {result['ticker']} (skor kuantitatif: {result['score']}/{result.get('max_score', MAX_SCORE)})"):
             col1, col2 = st.columns([1, 1])
             with col1:
                 st.image(result["chart"], use_container_width=True)

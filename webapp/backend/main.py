@@ -134,6 +134,9 @@ def _img_to_b64(img):
     return base64.standard_b64encode(buf.getvalue()).decode("utf-8")
 
 
+screener.warn_unmapped_strategies(_load_json("prompts.json", {}).keys())
+
+
 # --- Config endpoints ---
 
 @app.get("/api/models")
@@ -180,10 +183,11 @@ def run_screen(req: ScreenRequest):
     if req.prompt not in prompts:
         raise HTTPException(400, f"Unknown prompt strategy: {req.prompt}")
     raw_prompt = prompts[req.prompt]
+    scorer, max_score = screener.get_scorer(req.prompt)
 
     data = screener.fetch_ohlcv(tickers)
     index_df = screener.fetch_index_reference()
-    candidates = screener.shortlist(data, top_n=req.top_n, index_df=index_df)
+    candidates = screener.shortlist(data, top_n=req.top_n, index_df=index_df, scorer=scorer)
 
     results = []
     for cand in candidates:
@@ -221,7 +225,7 @@ def run_screen(req: ScreenRequest):
     return {
         "requested": len(tickers),
         "fetched": len(data),
-        "max_score": screener.MAX_SCORE,
+        "max_score": max_score,
         "candidates": results,
     }
 
