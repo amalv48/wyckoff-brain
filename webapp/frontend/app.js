@@ -142,18 +142,20 @@
     if (!plan) return "";
     const isSetup = plan.verdict === "SETUP";
     const rows = [
-      ["Phase", plan.phase || "—"],
-      ["Entry", plan.entry_low != null && plan.entry_high != null ? `${plan.entry_low}–${plan.entry_high}` : "—"],
-      ["Stop", plan.stop_loss ?? "—"],
-      ["Target", plan.target ?? "—"],
-      ["RRR", plan.rrr != null ? `1:${plan.rrr}` : "—"],
-      ["Risk", plan.risk_pct != null ? `${plan.risk_pct}%` : "—"],
+      ["Phase", plan.phase || "—", ""],
+      ["Entry", plan.entry_low != null && plan.entry_high != null ? `${plan.entry_low}–${plan.entry_high}` : "—", ""],
+      ["Stop", plan.stop_loss ?? "—", ""],
+      ["Loss at Stop", formatRp(plan.loss_at_stop_rp), "loss"],
+      ["Target", plan.target ?? "—", ""],
+      ["Profit at Target", formatRp(plan.profit_at_target_rp), "gain"],
+      ["RRR", plan.rrr != null ? `1:${plan.rrr}` : "—", ""],
+      ["Risk", plan.risk_pct != null ? `${plan.risk_pct}%` : "—", ""],
     ];
     return `
       <div class="plan-stats">
         <span class="verdict ${isSetup ? "setup" : "no-setup"}">${isSetup ? "Setup" : "No Setup"}</span>
         <div class="plan-grid mono">
-          ${rows.map(([k, v]) => `<div class="plan-cell"><span>${k}</span><b>${escapeHtml(String(v))}</b></div>`).join("")}
+          ${rows.map(([k, v, cls]) => `<div class="plan-cell"><span>${k}</span><b class="${cls}">${escapeHtml(String(v))}</b></div>`).join("")}
         </div>
       </div>`;
   }

@@ -63,12 +63,13 @@ ANALYSIS_SCHEMA = {
         "narrative_markdown": {
             "type": "string",
             "description": (
-                "Only the phase/structure analysis and reasoning, as normal "
-                "sentence-case Markdown paragraphs and headings (no all-caps). "
-                "Do NOT include a summary table, and do NOT restate the "
-                "verdict, entry range, stop loss, target, RRR, or risk "
-                "percentage here — those already appear in the fields above "
-                "and are shown separately in the UI."
+                "Only the phase/structure analysis and reasoning, as short, "
+                "concise, straightforward Markdown bullet points (not long "
+                "paragraphs), in normal sentence case (no all-caps). Do NOT "
+                "include a summary table, and do NOT restate the verdict, "
+                "entry range, stop loss, target, RRR, or risk percentage "
+                "here — those already appear in the fields above and are "
+                "shown separately in the UI."
             ),
         },
     },
@@ -107,6 +108,23 @@ def call_structured(provider, model_id, prompt, image=None):
         return narrative, plan
     except (json.JSONDecodeError, AttributeError):
         return _fix_double_escaped_newlines(raw), None
+
+
+def add_notional_pnl(plan, equity):
+    """Every strategy prompt already defines risk_pct as the NET (post-fee)
+    loss at the stop, as a percent of equity, and rrr as the NET reward:risk
+    ratio — so the Rupiah amounts fall straight out of those two numbers,
+    no extra AI round-trip or position-sizing math needed."""
+    if plan is None:
+        return plan
+    risk_pct = plan.get("risk_pct")
+    rrr = plan.get("rrr")
+    loss_at_stop_rp = round(equity * risk_pct / 100, 2) if risk_pct is not None else None
+    plan["loss_at_stop_rp"] = loss_at_stop_rp
+    plan["profit_at_target_rp"] = (
+        round(loss_at_stop_rp * rrr, 2) if loss_at_stop_rp is not None and rrr is not None else None
+    )
+    return plan
 
 
 def format_equity(value):
@@ -217,6 +235,7 @@ def run_screen(req: ScreenRequest):
         plan = None
         try:
             analysis, plan = call_structured(req.provider, req.model_id, prompt, image=chart_img)
+            plan = add_notional_pnl(plan, req.equity)
         except Exception as e:
             analysis = f"Analysis failed: {e}"
 
@@ -270,6 +289,7 @@ async def analyze_manual(
 
     try:
         analysis, plan = call_structured(provider, model_id, final_prompt, image=img)
+        plan = add_notional_pnl(plan, equity)
     except Exception as e:
         raise HTTPException(502, f"Analysis failed: {e}")
 
