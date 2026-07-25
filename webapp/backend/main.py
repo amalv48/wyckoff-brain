@@ -2,6 +2,7 @@ import base64
 import io
 import json
 import os
+from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
@@ -22,6 +23,12 @@ load_dotenv()
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 FRONTEND_DIR = Path(__file__).resolve().parent.parent / "frontend"
+
+# Railway restarts the container on every deploy, so process start time is a
+# reliable, human-readable stand-in for "when was this deployed" — Railway
+# doesn't expose a deploy timestamp env var, only a commit SHA, which is
+# harder to eyeball at a glance.
+_STARTED_AT = datetime.now(journal_store.JAKARTA_TZ)
 
 app = FastAPI(title="PITA — Wyckoff Tape Reader API")
 app.add_middleware(
@@ -257,11 +264,12 @@ screener.warn_unmapped_strategies(_load_json("prompts.json", {}).keys())
 
 @app.get("/api/version")
 def get_version():
-    """Railway injects these automatically into every build and deployment
-    (https://docs.railway.com/variables/reference) — no build step needed."""
-    commit_sha = os.environ.get("RAILWAY_GIT_COMMIT_SHA", "")
+    """deployed_at is this process's start time — Railway restarts the
+    container on every deploy, so it doubles as a human-readable deploy
+    timestamp, easier to eyeball than a commit SHA. branch/environment are
+    injected automatically by Railway (https://docs.railway.com/variables/reference)."""
     return {
-        "commit": commit_sha[:7] if commit_sha else "dev",
+        "deployed_at": _STARTED_AT.strftime("%Y-%m-%d %H:%M") + " WIB",
         "branch": os.environ.get("RAILWAY_GIT_BRANCH", ""),
         "environment": os.environ.get("RAILWAY_ENVIRONMENT_NAME", ""),
     }

@@ -85,7 +85,7 @@
   async function loadVersion() {
     try {
       const v = await fetch("/api/version").then((r) => r.json());
-      const parts = [`build ${v.commit}`];
+      const parts = [`deployed ${v.deployed_at}`];
       if (v.branch) parts.push(v.branch);
       if (v.environment) parts.push(v.environment);
       $("versionTag").textContent = ` · ${parts.join(" · ")}`;
