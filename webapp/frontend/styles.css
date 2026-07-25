@@ -285,6 +285,7 @@ section.view.active { display: block; }
 .pnl.down { color: var(--loss); }
 
 footer.note { margin-top: 40px; padding-top: 18px; border-top: 1px solid var(--border); font-size: 12.5px; color: var(--ink-faint); font-style: italic; }
+footer.note #versionTag { font-family: ui-monospace, monospace; font-style: normal; }
 
 @media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; transition: none !important; animation: none !important; } }
 

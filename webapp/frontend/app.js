@@ -80,6 +80,19 @@
     refreshModels();
   }
 
+  // ---------- version footer ----------
+  async function loadVersion() {
+    try {
+      const v = await fetch("/api/version").then((r) => r.json());
+      const parts = [`build ${v.commit}`];
+      if (v.branch) parts.push(v.branch);
+      if (v.environment) parts.push(v.environment);
+      $("versionTag").textContent = ` · ${parts.join(" · ")}`;
+    } catch (e) {
+      // non-critical, leave the footer without a version tag
+    }
+  }
+
   // ---------- init ----------
   async function init() {
     try {
@@ -397,4 +410,5 @@
   });
 
   init();
+  loadVersion();
 })();

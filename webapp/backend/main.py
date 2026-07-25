@@ -1,6 +1,7 @@
 import base64
 import io
 import json
+import os
 from pathlib import Path
 from typing import Optional
 
@@ -138,6 +139,18 @@ screener.warn_unmapped_strategies(_load_json("prompts.json", {}).keys())
 
 
 # --- Config endpoints ---
+
+@app.get("/api/version")
+def get_version():
+    """Railway injects these automatically into every build and deployment
+    (https://docs.railway.com/variables/reference) — no build step needed."""
+    commit_sha = os.environ.get("RAILWAY_GIT_COMMIT_SHA", "")
+    return {
+        "commit": commit_sha[:7] if commit_sha else "dev",
+        "branch": os.environ.get("RAILWAY_GIT_BRANCH", ""),
+        "environment": os.environ.get("RAILWAY_ENVIRONMENT_NAME", ""),
+    }
+
 
 @app.get("/api/models")
 def get_models():
