@@ -461,7 +461,13 @@ def automation_tick():
         ]
 
     automation_store.mark_ticked()
+    automation_store.save_results(settings["index_name"], results)
     return {"due": True, "results": results}
+
+
+@app.get("/api/automation/results")
+def get_automation_results(limit: int = 20):
+    return automation_store.load_recent_results(limit)
 
 
 # --- Manual chart analysis ---

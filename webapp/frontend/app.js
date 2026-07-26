@@ -147,6 +147,46 @@
     } catch (e) {
       $("automationStatus").textContent = "Settings unavailable: " + e.message;
     }
+
+    try {
+      const res = await fetch("/api/automation/results");
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).detail || res.statusText);
+      renderAutomationResults(await res.json());
+    } catch (e) {
+      $("autoResultsList").innerHTML = `<div class="empty-state">Couldn't load recent setups: ${escapeHtml(e.message)}</div>`;
+    }
+  }
+
+  function formatWib(iso) {
+    if (!iso) return "";
+    const d = new Date(iso);
+    // WIB is a fixed UTC+7 offset (no DST) — compute directly rather than
+    // relying on the browser's local timezone.
+    const wib = new Date(d.getTime() + 7 * 60 * 60 * 1000);
+    const pad = (n) => String(n).padStart(2, "0");
+    return `${wib.getUTCFullYear()}-${pad(wib.getUTCMonth() + 1)}-${pad(wib.getUTCDate())} ${pad(wib.getUTCHours())}:${pad(wib.getUTCMinutes())}`;
+  }
+
+  function renderAutomationResults(results) {
+    const el = $("autoResultsList");
+    if (!results || !results.length) {
+      el.innerHTML = `<div class="empty-state">No automated setups yet. They'll show up here once automation is enabled and finds one.</div>`;
+      return;
+    }
+    el.innerHTML = results
+      .map((r) => {
+        const plan = { ...r, verdict: "SETUP" };
+        return `
+          <div class="manual-result" style="margin-bottom:14px;">
+            <div style="display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:8px;margin-bottom:6px;">
+              <span class="mono" style="font-size:16px;font-weight:700;">${escapeHtml(r.ticker)}</span>
+              <span class="run-status">${escapeHtml(r.strategy)} · ${formatWib(r.ticked_at)} WIB · score ${escapeHtml(String(r.score ?? "—"))}</span>
+            </div>
+            ${planHtml(plan)}
+            ${r.narrative_markdown ? `<div class="excerpt" style="padding:0;margin-top:6px;">${escapeHtml(r.narrative_markdown)}</div>` : ""}
+          </div>`;
+      })
+      .join("");
   }
 
   $("btnSaveAutomation").addEventListener("click", async () => {

@@ -81,3 +81,63 @@ def mark_ticked():
     _get_client().table("automation_settings").update(
         {"last_run_at": datetime.now(timezone.utc).isoformat()}
     ).eq("id", 1).execute()
+
+
+PLAN_FIELDS = [
+    "phase", "entry_low", "entry_high", "stop_loss", "target", "rrr",
+    "risk_pct", "action", "lots", "shares", "loss_at_stop_rp", "profit_at_target_rp",
+]
+
+
+def _is_missing_results_table(exc):
+    message = str(exc)
+    return "automation_results" in message and ("does not exist" in message or "42P01" in message)
+
+
+def save_results(index_name, results_by_strategy):
+    """Persist every SETUP candidate from one tick so the app can show them
+    later, independent of whether the push notification / its CCR session
+    is ever opened. results_by_strategy is {strategy: [candidate, ...]},
+    already filtered to SETUP-only by the caller. No-ops silently if the
+    migration hasn't been applied yet — a missing results table should
+    never break the tick itself."""
+    rows = []
+    for strategy, candidates in results_by_strategy.items():
+        for cand in candidates:
+            plan = cand.get("plan") or {}
+            row = {
+                "strategy": strategy,
+                "index_name": index_name,
+                "ticker": cand["ticker"],
+                "score": cand.get("score"),
+                "last_close": cand.get("last_close"),
+                "narrative_markdown": cand.get("analysis"),
+                **{k: plan.get(k) for k in PLAN_FIELDS},
+            }
+            rows.append(row)
+    if not rows:
+        return
+    try:
+        _get_client().table("automation_results").insert(rows).execute()
+    except Exception as e:
+        if not _is_missing_results_table(e):
+            raise
+
+
+def load_recent_results(limit=20):
+    """Most recent persisted SETUP results, newest first. Returns an empty
+    list if the migration hasn't been applied yet."""
+    try:
+        res = (
+            _get_client()
+            .table("automation_results")
+            .select("*")
+            .order("ticked_at", desc=True)
+            .limit(limit)
+            .execute()
+        )
+    except Exception as e:
+        if _is_missing_results_table(e):
+            return []
+        raise
+    return res.data
