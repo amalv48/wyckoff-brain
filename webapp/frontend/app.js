@@ -85,6 +85,11 @@
 
   // ---------- automation ----------
   const AUTO_HOURS = [7, 8, 9, 10, 11, 12, 13, 14, 15, 16];
+  const AUTOMATION_DEFAULTS = {
+    enabled: false, hours_wib: [], index_name: "LQ45", custom_tickers: [],
+    strategies: [], provider: "Claude", model_id: "claude-sonnet-5",
+    equity: 10000000, top_n: 4,
+  };
 
   function wibLabel(h) {
     return String(h).padStart(2, "0") + ":00";
@@ -93,6 +98,120 @@
   function toggleChip(cb) {
     cb.closest(".choice-chip").classList.toggle("checked", cb.checked);
   }
+
+  function applySettingsToForm(settings) {
+    $("autoEnabled").checked = !!settings.enabled;
+    $("autoIndex").value = settings.index_name || "LQ45";
+    $("autoCustomTickersField").style.display = $("autoIndex").value === "Custom" ? "block" : "none";
+    $("autoCustomTickers").value = (settings.custom_tickers || []).join(", ");
+    $("autoProvider").value = settings.provider || "Claude";
+    $("autoProvider").dispatchEvent(new Event("change"));
+    $("autoModel").value = settings.model_id || "";
+    $("autoTopN").value = settings.top_n ?? 4;
+    $("autoEquity").value = settings.equity ?? 9500000;
+    $("autoEquity").dispatchEvent(new Event("input"));
+
+    const activeHours = new Set(settings.hours_wib || []);
+    $("autoHours").querySelectorAll("input[type=checkbox]").forEach((cb) => {
+      cb.checked = activeHours.has(parseInt(cb.value, 10));
+      toggleChip(cb);
+    });
+    const activeStrategies = new Set(settings.strategies || []);
+    $("autoStrategies").querySelectorAll("input[type=checkbox]").forEach((cb) => {
+      cb.checked = activeStrategies.has(cb.value);
+      toggleChip(cb);
+    });
+  }
+
+  function collectFormSettings() {
+    const hours_wib = Array.from($("autoHours").querySelectorAll("input:checked")).map((cb) => parseInt(cb.value, 10));
+    const strategies = Array.from($("autoStrategies").querySelectorAll("input:checked")).map((cb) => cb.value);
+    const customTickers = $("autoCustomTickers").value.split(",").map((t) => t.trim().toUpperCase()).filter(Boolean);
+    return {
+      enabled: $("autoEnabled").checked,
+      hours_wib,
+      index_name: $("autoIndex").value,
+      custom_tickers: $("autoIndex").value === "Custom" ? customTickers : [],
+      strategies,
+      provider: $("autoProvider").value,
+      model_id: $("autoModel").value,
+      equity: parseAutoEquity(),
+      top_n: parseInt($("autoTopN").value, 10) || 4,
+    };
+  }
+
+  async function putAutomationSettings(payload) {
+    const res = await fetch("/api/automation/settings", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || res.statusText);
+    }
+    return await res.json();
+  }
+
+  function renderActiveAutomationSummary(settings) {
+    const el = $("autoActiveSummary");
+    if (!settings) {
+      el.innerHTML = `<div class="empty-state" style="margin:0;">Settings unavailable.</div>`;
+      return;
+    }
+    const hourTags = (settings.hours_wib || []).slice().sort((a, b) => a - b).map(
+      (h) => `<span class="removable-tag" data-kind="hour" data-value="${h}">${wibLabel(h)}<button type="button" aria-label="Remove ${wibLabel(h)}">×</button></span>`
+    ).join("") || `<span class="field-hint" style="margin:0;">none selected</span>`;
+    const strategyTags = (settings.strategies || []).map(
+      (s) => `<span class="removable-tag" data-kind="strategy" data-value="${escapeHtml(s)}">${escapeHtml(s)}<button type="button" aria-label="Remove ${escapeHtml(s)}">×</button></span>`
+    ).join("") || `<span class="field-hint" style="margin:0;">none selected</span>`;
+
+    el.innerHTML = `
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:14px;">
+        <span class="verdict ${settings.enabled ? "setup" : "no-setup"}">${settings.enabled ? "Automation ON" : "Automation OFF"}</span>
+        <button class="btn-link btn-danger" id="btnClearAutomation" type="button">Disable &amp; clear</button>
+      </div>
+      <label class="field-hint" style="margin:0 0 6px;">Active hours (WIB)</label>
+      <div class="choice-grid" style="margin-bottom:14px;">${hourTags}</div>
+      <label class="field-hint" style="margin:0 0 6px;">Active strategies</label>
+      <div class="choice-grid" style="margin-bottom:14px;">${strategyTags}</div>
+      <div class="field-hint" style="margin:0;">
+        Index: ${escapeHtml(settings.index_name || "—")} · Provider: ${escapeHtml(settings.provider || "—")} · Model: ${escapeHtml(settings.model_id || "—")} · Capital: ${formatRp(settings.equity)}
+      </div>`;
+  }
+
+  async function applyAndSaveAutomation(payload) {
+    $("automationStatus").textContent = "Saving...";
+    try {
+      const saved = await putAutomationSettings(payload);
+      state.automationSettings = saved;
+      applySettingsToForm(saved);
+      renderActiveAutomationSummary(saved);
+      $("automationStatus").textContent = "Saved ✓";
+    } catch (e) {
+      $("automationStatus").textContent = "Failed: " + e.message;
+    }
+  }
+
+  $("autoActiveSummary").addEventListener("click", (e) => {
+    if (e.target.closest("#btnClearAutomation")) {
+      if (confirm("Turn off automation and clear all saved settings?")) {
+        applyAndSaveAutomation({ ...AUTOMATION_DEFAULTS });
+      }
+      return;
+    }
+    const removeBtn = e.target.closest(".removable-tag button");
+    if (!removeBtn || !state.automationSettings) return;
+    const tag = removeBtn.closest(".removable-tag");
+    const { kind, value } = tag.dataset;
+    const updated = { ...state.automationSettings };
+    if (kind === "hour") {
+      updated.hours_wib = (updated.hours_wib || []).filter((h) => String(h) !== value);
+    } else if (kind === "strategy") {
+      updated.strategies = (updated.strategies || []).filter((s) => s !== value);
+    }
+    applyAndSaveAutomation(updated);
+  });
 
   async function initAutomation() {
     populateProviderModel("autoProvider", "autoModel");
@@ -122,30 +241,12 @@
       const res = await fetch("/api/automation/settings");
       if (!res.ok) throw new Error((await res.json().catch(() => ({}))).detail || res.statusText);
       const settings = await res.json();
-
-      $("autoEnabled").checked = !!settings.enabled;
-      $("autoIndex").value = settings.index_name || "LQ45";
-      $("autoCustomTickersField").style.display = $("autoIndex").value === "Custom" ? "block" : "none";
-      $("autoCustomTickers").value = (settings.custom_tickers || []).join(", ");
-      $("autoProvider").value = settings.provider || "Claude";
-      $("autoProvider").dispatchEvent(new Event("change"));
-      $("autoModel").value = settings.model_id || "";
-      $("autoTopN").value = settings.top_n ?? 4;
-      $("autoEquity").value = settings.equity ?? 9500000;
-      $("autoEquity").dispatchEvent(new Event("input"));
-
-      const activeHours = new Set(settings.hours_wib || []);
-      $("autoHours").querySelectorAll("input[type=checkbox]").forEach((cb) => {
-        cb.checked = activeHours.has(parseInt(cb.value, 10));
-        toggleChip(cb);
-      });
-      const activeStrategies = new Set(settings.strategies || []);
-      $("autoStrategies").querySelectorAll("input[type=checkbox]").forEach((cb) => {
-        cb.checked = activeStrategies.has(cb.value);
-        toggleChip(cb);
-      });
+      state.automationSettings = settings;
+      applySettingsToForm(settings);
+      renderActiveAutomationSummary(settings);
     } catch (e) {
       $("automationStatus").textContent = "Settings unavailable: " + e.message;
+      renderActiveAutomationSummary(null);
     }
 
     try {
@@ -192,37 +293,8 @@
   $("btnSaveAutomation").addEventListener("click", async () => {
     const btn = $("btnSaveAutomation");
     btn.disabled = true;
-    $("automationStatus").textContent = "Saving...";
-
-    const hours_wib = Array.from($("autoHours").querySelectorAll("input:checked")).map((cb) => parseInt(cb.value, 10));
-    const strategies = Array.from($("autoStrategies").querySelectorAll("input:checked")).map((cb) => cb.value);
-    const customTickers = $("autoCustomTickers").value.split(",").map((t) => t.trim().toUpperCase()).filter(Boolean);
-
-    const payload = {
-      enabled: $("autoEnabled").checked,
-      hours_wib,
-      index_name: $("autoIndex").value,
-      custom_tickers: $("autoIndex").value === "Custom" ? customTickers : [],
-      strategies,
-      provider: $("autoProvider").value,
-      model_id: $("autoModel").value,
-      equity: parseAutoEquity(),
-      top_n: parseInt($("autoTopN").value, 10) || 4,
-    };
-
     try {
-      const res = await fetch("/api/automation/settings", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.detail || res.statusText);
-      }
-      $("automationStatus").textContent = "Saved ✓";
-    } catch (e) {
-      $("automationStatus").textContent = "Failed: " + e.message;
+      await applyAndSaveAutomation(collectFormSettings());
     } finally {
       btn.disabled = false;
     }

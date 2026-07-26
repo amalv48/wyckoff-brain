@@ -275,6 +275,17 @@ section.view.active { display: block; }
 }
 .choice-chip input { margin: 0; width: auto; }
 .choice-chip.checked { color: var(--ink); border-color: var(--accent); background: var(--accent-soft); }
+
+.removable-tag {
+  font-family: ui-monospace, monospace; font-size: 12px; letter-spacing: 0.03em;
+  background: var(--accent-soft); border: 1px solid var(--border); color: var(--ink);
+  padding: 5px 6px 5px 11px; display: inline-flex; align-items: center; gap: 8px;
+}
+.removable-tag button {
+  font-family: inherit; background: none; border: none; color: var(--ink-dim);
+  cursor: pointer; padding: 0 3px; font-size: 15px; line-height: 1;
+}
+.removable-tag button:hover { color: var(--loss); }
 .position-fields { border-top: 1px dashed var(--border); padding-top: 14px; margin-top: 4px; }
 .position-heading { margin-bottom: 4px !important; }
 .position-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
