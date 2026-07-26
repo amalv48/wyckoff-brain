@@ -9,8 +9,9 @@ from typing import Optional
 import bleach
 import markdown as md_lib
 from dotenv import load_dotenv
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from PIL import Image
 from pydantic import BaseModel
@@ -38,6 +39,18 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception):
+    """Without this, an uncaught error falls through to Starlette's default
+    plain-text 500 response — not valid JSON, so the frontend's res.json()
+    fails too and swallows the real error, showing a blank 'Failed: '
+    message instead of anything actionable. This guarantees every error
+    path returns {"detail": ...} so the frontend always has something to
+    show. Doesn't affect HTTPException — FastAPI's more specific handler
+    for that still takes precedence."""
+    return JSONResponse(status_code=500, content={"detail": f"{type(exc).__name__}: {exc}"})
 
 _ALLOWED_MD_TAGS = [
     "p", "br", "hr", "strong", "b", "em", "i", "u",

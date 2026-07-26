@@ -187,7 +187,10 @@
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
-      throw new Error(err.detail || res.statusText);
+      // res.statusText is often empty over HTTP/2 (no reason phrase), so
+      // always fall back to the numeric status rather than risking a blank
+      // "Failed: " message that gives no clue what went wrong.
+      throw new Error(err.detail || res.statusText || `HTTP ${res.status}`);
     }
     return await res.json();
   }
