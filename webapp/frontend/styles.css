@@ -120,6 +120,8 @@ section.view.active { display: block; }
   display: grid; grid-template-columns: repeat(5, 1fr); gap: 1px;
   background: var(--border); border: 1px solid var(--border); margin-bottom: 20px;
 }
+.controls-3 { grid-template-columns: repeat(3, 1fr); }
+.controls-2 { grid-template-columns: repeat(2, 1fr); }
 .controls .field { background: var(--bg-raised); padding: 14px 16px; }
 .controls .field label {
   display: block; font-family: ui-monospace, monospace; font-size: 10.5px; letter-spacing: 0.1em;
@@ -315,5 +317,17 @@ footer.note #versionTag { font-family: ui-monospace, monospace; font-style: norm
 
 @media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; transition: none !important; animation: none !important; } }
 
-@media (max-width: 900px) { .controls { grid-template-columns: repeat(2, 1fr); } }
-@media (max-width: 640px) { header.top { flex-direction: column; align-items: flex-start; gap: 12px; } }
+@media (max-width: 900px) { .controls, .controls-2, .controls-3 { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 640px) {
+  body { overflow-x: hidden; }
+  .wrap { padding: 0 16px 60px; }
+  header.top { flex-direction: column; align-items: flex-start; gap: 12px; }
+  nav.tabs {
+    overflow-x: auto; flex-wrap: nowrap; -webkit-overflow-scrolling: touch;
+    scrollbar-width: none; margin-bottom: 20px;
+  }
+  nav.tabs::-webkit-scrollbar { display: none; }
+  nav.tabs button { flex: 0 0 auto; font-size: 11.5px; padding: 10px 3px; margin-right: 16px; white-space: nowrap; }
+  .controls, .controls-2, .controls-3 { grid-template-columns: 1fr; }
+  .position-row { grid-template-columns: 1fr; }
+}

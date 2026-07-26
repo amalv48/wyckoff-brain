@@ -62,6 +62,7 @@
       document.querySelectorAll("section.view").forEach((x) => x.classList.remove("active"));
       b.classList.add("active");
       $("view-" + b.dataset.view).classList.add("active");
+      b.scrollIntoView({ block: "nearest", inline: "nearest" });
     });
   });
 
