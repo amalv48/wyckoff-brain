@@ -16,6 +16,7 @@
     </div>
     <div class="top-right">
       <span class="live-pill" id="apiStatus"><span class="blip"></span>connecting...</span>
+      <button class="theme-toggle" id="btnRefreshApp" title="Reload the app">⟳ Refresh</button>
       <button class="theme-toggle" id="themeToggle">Dark Mode</button>
     </div>
   </header>
@@ -166,9 +167,15 @@
         <input type="checkbox" id="autoEnabled" style="width:auto;margin:0;"> Enable automated screening
       </label>
 
+      <label>Run Days</label>
+      <p class="field-hint">IDX doesn't trade weekends, so only weekdays are offered.</p>
+      <div class="choice-grid" id="autoDays"></div>
+
       <label>Run Hours (WIB)</label>
       <p class="field-hint">Times snap to the hour — the scheduler's minimum interval is 1 hour. Covers IDX pre-open (08:45) through close (15:49/16:05 auction).</p>
       <div class="choice-grid" id="autoHours"></div>
+
+      <p class="field-hint">Ticking hours/days/strategies here <strong>adds</strong> them to the active config above — it doesn't replace it. To remove something, use the × on its tag above.</p>
 
       <div class="controls controls-2" style="margin:20px 0;">
         <div class="field">

@@ -2,7 +2,7 @@ import base64
 import io
 import json
 import os
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Optional
 
@@ -388,6 +388,7 @@ def run_screen(req: ScreenRequest):
 class AutomationSettings(BaseModel):
     enabled: bool = False
     hours_wib: list[int] = []
+    days_wib: list[int] = [0, 1, 2, 3, 4]  # Monday-Friday
     index_name: str = "LQ45"
     custom_tickers: list[str] = []
     strategies: list[str] = []
@@ -432,7 +433,13 @@ def automation_tick():
 
     now_utc = datetime.now(timezone.utc)
     wib_hour = (now_utc.hour + 7) % 24
+    # WIB is UTC+7 with no date rollover risk here: the active hour-slots
+    # (07:00-16:00 WIB) never cross midnight, so deriving the weekday from
+    # WIB-shifted time is safe and always matches the WIB calendar day.
+    wib_weekday = (now_utc + timedelta(hours=7)).weekday()  # Monday=0
     hour_bucket = now_utc.replace(minute=0, second=0, microsecond=0)
+    if wib_weekday not in settings["days_wib"]:
+        return {"due": False}
     if wib_hour not in settings["hours_wib"]:
         return {"due": False}
 

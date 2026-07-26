@@ -45,6 +45,11 @@
   const parsePositionAvgPrice = attachThousandsFormatter($("inpPositionAvgPrice"));
   const parseAutoEquity = attachThousandsFormatter($("autoEquity"));
 
+  // ---------- refresh ----------
+  $("btnRefreshApp").addEventListener("click", function () {
+    location.reload();
+  });
+
   // ---------- theme ----------
   const root = document.documentElement;
   $("themeToggle").addEventListener("click", function () {
@@ -85,8 +90,10 @@
 
   // ---------- automation ----------
   const AUTO_HOURS = [7, 8, 9, 10, 11, 12, 13, 14, 15, 16];
+  const AUTO_DAYS = [0, 1, 2, 3, 4]; // Monday-Friday
+  const AUTO_DAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri"];
   const AUTOMATION_DEFAULTS = {
-    enabled: false, hours_wib: [], index_name: "LQ45", custom_tickers: [],
+    enabled: false, hours_wib: [], days_wib: [], index_name: "LQ45", custom_tickers: [],
     strategies: [], provider: "Claude", model_id: "claude-sonnet-5",
     equity: 10000000, top_n: 4,
   };
@@ -95,11 +102,18 @@
     return String(h).padStart(2, "0") + ":00";
   }
 
+  function dayLabel(d) {
+    return AUTO_DAY_LABELS[d] || String(d);
+  }
+
   function toggleChip(cb) {
     cb.closest(".choice-chip").classList.toggle("checked", cb.checked);
   }
 
-  function applySettingsToForm(settings) {
+  // Fields with exactly one active value at a time (overwritten on save,
+  // never merged) — distinct from hours/days/strategies, which Save treats
+  // as additions to the existing active list.
+  function applySingleValueSettingsToForm(settings) {
     $("autoEnabled").checked = !!settings.enabled;
     $("autoIndex").value = settings.index_name || "LQ45";
     $("autoCustomTickersField").style.display = $("autoIndex").value === "Custom" ? "block" : "none";
@@ -110,10 +124,31 @@
     $("autoTopN").value = settings.top_n ?? 4;
     $("autoEquity").value = settings.equity ?? 9500000;
     $("autoEquity").dispatchEvent(new Event("input"));
+  }
 
+  function clearMultiSelectForm() {
+    ["autoHours", "autoDays", "autoStrategies"].forEach((id) => {
+      $(id).querySelectorAll("input[type=checkbox]").forEach((cb) => {
+        cb.checked = false;
+        toggleChip(cb);
+      });
+    });
+  }
+
+  // Full sync: single-value fields + check the boxes matching current
+  // active state. Only used on initial tab load — after that, the form is
+  // a staging area for additions (see clearMultiSelectForm), not a mirror
+  // of the saved config (the Active Automation panel is that mirror).
+  function applySettingsToForm(settings) {
+    applySingleValueSettingsToForm(settings);
     const activeHours = new Set(settings.hours_wib || []);
     $("autoHours").querySelectorAll("input[type=checkbox]").forEach((cb) => {
       cb.checked = activeHours.has(parseInt(cb.value, 10));
+      toggleChip(cb);
+    });
+    const activeDays = new Set(settings.days_wib || []);
+    $("autoDays").querySelectorAll("input[type=checkbox]").forEach((cb) => {
+      cb.checked = activeDays.has(parseInt(cb.value, 10));
       toggleChip(cb);
     });
     const activeStrategies = new Set(settings.strategies || []);
@@ -123,20 +158,24 @@
     });
   }
 
-  function collectFormSettings() {
-    const hours_wib = Array.from($("autoHours").querySelectorAll("input:checked")).map((cb) => parseInt(cb.value, 10));
-    const strategies = Array.from($("autoStrategies").querySelectorAll("input:checked")).map((cb) => cb.value);
+  function collectSingleValueSettings() {
     const customTickers = $("autoCustomTickers").value.split(",").map((t) => t.trim().toUpperCase()).filter(Boolean);
     return {
       enabled: $("autoEnabled").checked,
-      hours_wib,
       index_name: $("autoIndex").value,
       custom_tickers: $("autoIndex").value === "Custom" ? customTickers : [],
-      strategies,
       provider: $("autoProvider").value,
       model_id: $("autoModel").value,
       equity: parseAutoEquity(),
       top_n: parseInt($("autoTopN").value, 10) || 4,
+    };
+  }
+
+  function collectFormAdditions() {
+    return {
+      hours_wib: Array.from($("autoHours").querySelectorAll("input:checked")).map((cb) => parseInt(cb.value, 10)),
+      days_wib: Array.from($("autoDays").querySelectorAll("input:checked")).map((cb) => parseInt(cb.value, 10)),
+      strategies: Array.from($("autoStrategies").querySelectorAll("input:checked")).map((cb) => cb.value),
     };
   }
 
@@ -153,24 +192,29 @@
     return await res.json();
   }
 
+  function tagsHtml(kind, items, labelFn) {
+    return items.map(
+      (v) => `<span class="removable-tag" data-kind="${kind}" data-value="${escapeHtml(String(v))}">${escapeHtml(labelFn(v))}<button type="button" aria-label="Remove ${escapeHtml(labelFn(v))}">×</button></span>`
+    ).join("") || `<span class="field-hint" style="margin:0;">none selected</span>`;
+  }
+
   function renderActiveAutomationSummary(settings) {
     const el = $("autoActiveSummary");
     if (!settings) {
       el.innerHTML = `<div class="empty-state" style="margin:0;">Settings unavailable.</div>`;
       return;
     }
-    const hourTags = (settings.hours_wib || []).slice().sort((a, b) => a - b).map(
-      (h) => `<span class="removable-tag" data-kind="hour" data-value="${h}">${wibLabel(h)}<button type="button" aria-label="Remove ${wibLabel(h)}">×</button></span>`
-    ).join("") || `<span class="field-hint" style="margin:0;">none selected</span>`;
-    const strategyTags = (settings.strategies || []).map(
-      (s) => `<span class="removable-tag" data-kind="strategy" data-value="${escapeHtml(s)}">${escapeHtml(s)}<button type="button" aria-label="Remove ${escapeHtml(s)}">×</button></span>`
-    ).join("") || `<span class="field-hint" style="margin:0;">none selected</span>`;
+    const dayTags = tagsHtml("day", (settings.days_wib || []).slice().sort((a, b) => a - b), dayLabel);
+    const hourTags = tagsHtml("hour", (settings.hours_wib || []).slice().sort((a, b) => a - b), wibLabel);
+    const strategyTags = tagsHtml("strategy", settings.strategies || [], (s) => s);
 
     el.innerHTML = `
       <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:14px;">
         <span class="verdict ${settings.enabled ? "setup" : "no-setup"}">${settings.enabled ? "Automation ON" : "Automation OFF"}</span>
         <button class="btn-link btn-danger" id="btnClearAutomation" type="button">Disable &amp; clear</button>
       </div>
+      <label class="field-hint" style="margin:0 0 6px;">Active days</label>
+      <div class="choice-grid" style="margin-bottom:14px;">${dayTags}</div>
       <label class="field-hint" style="margin:0 0 6px;">Active hours (WIB)</label>
       <div class="choice-grid" style="margin-bottom:14px;">${hourTags}</div>
       <label class="field-hint" style="margin:0 0 6px;">Active strategies</label>
@@ -180,12 +224,24 @@
       </div>`;
   }
 
-  async function applyAndSaveAutomation(payload) {
+  // formSync: "full" resyncs every field (incl. checking active boxes) to
+  // match the saved state — used for initial load and Disable & Clear.
+  // "clear-multi" syncs single-value fields but blanks the hour/day/
+  // strategy checkboxes — used after an additive Save, since those boxes
+  // are a staging area, not a mirror of what's now active. "none" leaves
+  // the form untouched — used after removing one tag, so it doesn't
+  // clobber whatever the user was mid-adding.
+  async function applyAndSaveAutomation(payload, formSync = "full") {
     $("automationStatus").textContent = "Saving...";
     try {
       const saved = await putAutomationSettings(payload);
       state.automationSettings = saved;
-      applySettingsToForm(saved);
+      if (formSync === "full") {
+        applySettingsToForm(saved);
+      } else if (formSync === "clear-multi") {
+        applySingleValueSettingsToForm(saved);
+        clearMultiSelectForm();
+      }
       renderActiveAutomationSummary(saved);
       $("automationStatus").textContent = "Saved ✓";
     } catch (e) {
@@ -196,7 +252,7 @@
   $("autoActiveSummary").addEventListener("click", (e) => {
     if (e.target.closest("#btnClearAutomation")) {
       if (confirm("Turn off automation and clear all saved settings?")) {
-        applyAndSaveAutomation({ ...AUTOMATION_DEFAULTS });
+        applyAndSaveAutomation({ ...AUTOMATION_DEFAULTS }, "full");
       }
       return;
     }
@@ -207,10 +263,12 @@
     const updated = { ...state.automationSettings };
     if (kind === "hour") {
       updated.hours_wib = (updated.hours_wib || []).filter((h) => String(h) !== value);
+    } else if (kind === "day") {
+      updated.days_wib = (updated.days_wib || []).filter((d) => String(d) !== value);
     } else if (kind === "strategy") {
       updated.strategies = (updated.strategies || []).filter((s) => s !== value);
     }
-    applyAndSaveAutomation(updated);
+    applyAndSaveAutomation(updated, "none");
   });
 
   async function initAutomation() {
@@ -221,6 +279,13 @@
       .join("");
     $("autoIndex").addEventListener("change", () => {
       $("autoCustomTickersField").style.display = $("autoIndex").value === "Custom" ? "block" : "none";
+    });
+
+    $("autoDays").innerHTML = AUTO_DAYS.map(
+      (d) => `<label class="choice-chip"><input type="checkbox" value="${d}"> ${dayLabel(d)}</label>`
+    ).join("");
+    $("autoDays").querySelectorAll("input[type=checkbox]").forEach((cb) => {
+      cb.addEventListener("change", () => toggleChip(cb));
     });
 
     $("autoHours").innerHTML = AUTO_HOURS.map(
@@ -294,7 +359,15 @@
     const btn = $("btnSaveAutomation");
     btn.disabled = true;
     try {
-      await applyAndSaveAutomation(collectFormSettings());
+      const current = state.automationSettings || { ...AUTOMATION_DEFAULTS };
+      const additions = collectFormAdditions();
+      const merged = {
+        ...collectSingleValueSettings(),
+        hours_wib: Array.from(new Set([...(current.hours_wib || []), ...additions.hours_wib])),
+        days_wib: Array.from(new Set([...(current.days_wib || []), ...additions.days_wib])),
+        strategies: Array.from(new Set([...(current.strategies || []), ...additions.strategies])),
+      };
+      await applyAndSaveAutomation(merged, "clear-multi");
     } finally {
       btn.disabled = false;
     }

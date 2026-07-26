@@ -10,6 +10,7 @@ _client = None
 DEFAULTS = {
     "enabled": False,
     "hours_wib": [],
+    "days_wib": [0, 1, 2, 3, 4],  # Monday-Friday
     "index_name": "LQ45",
     "custom_tickers": [],
     "strategies": [],
@@ -37,6 +38,11 @@ def _get_client():
 def _is_missing_table(exc):
     message = str(exc)
     return "automation_settings" in message and ("does not exist" in message or "42P01" in message)
+
+
+def _is_missing_days_column(exc):
+    message = str(exc)
+    return "days_wib" in message and ("does not exist" in message or "42703" in message)
 
 
 def load():
@@ -67,6 +73,16 @@ def save(settings):
     try:
         res = _get_client().table("automation_settings").upsert(payload).execute()
     except Exception as e:
+        # Check the column-specific error before the generic table check —
+        # a "column days_wib of relation automation_settings does not
+        # exist" message contains both "automation_settings" and "does not
+        # exist", so it would otherwise false-match _is_missing_table and
+        # point the user at the wrong migration.
+        if _is_missing_days_column(e):
+            raise SchemaNotReadyError(
+                "The days_wib column doesn't exist yet — run "
+                "supabase/migrations/0005_add_days_to_automation_settings.sql first."
+            ) from e
         if _is_missing_table(e):
             raise SchemaNotReadyError(
                 "The automation_settings table doesn't exist yet — run "
