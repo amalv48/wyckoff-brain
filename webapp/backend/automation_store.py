@@ -1,5 +1,5 @@
 import os
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 
 from supabase import create_client
 
@@ -118,8 +118,7 @@ def _is_missing_dedup_constraint(exc):
     return "42P10" in message or "no unique or exclusion constraint" in message
 
 
-RESULTS_RETENTION_DAYS = 60
-JAKARTA_OFFSET = timedelta(hours=7)  # WIB, fixed offset, no DST
+RESULTS_KEEP_LATEST = 10
 
 
 def save_results(index_name, results_by_strategy):
@@ -158,19 +157,30 @@ def save_results(index_name, results_by_strategy):
         _get_client().table("automation_results").upsert(
             rows, on_conflict="ticker,strategy,trade_date"
         ).execute()
-        _prune_old_results()
+        _prune_excess_results()
     except Exception as e:
         if not (_is_missing_results_table(e) or _is_missing_dedup_constraint(e)):
             raise
 
 
-def _prune_old_results():
-    """Keep the table bounded — automated setups older than the retention
-    window aren't useful as a 'recent setups' feed and would otherwise
-    grow forever. Runs after every save; cheap no-op most days since
-    there's rarely anything that old to delete."""
-    cutoff = ((datetime.now(timezone.utc) + JAKARTA_OFFSET).date() - timedelta(days=RESULTS_RETENTION_DAYS)).isoformat()
-    _get_client().table("automation_results").delete().lt("trade_date", cutoff).execute()
+def _prune_excess_results():
+    """Keep only the RESULTS_KEEP_LATEST most recent rows. Count-based
+    rather than time-based: this only notifies on actual SETUP verdicts,
+    so quiet market stretches are normal and a fixed time window would
+    make the list look empty/broken during them instead of just being
+    selective. Runs after every save; cheap no-op once under the cap."""
+    keep_ids_res = (
+        _get_client()
+        .table("automation_results")
+        .select("id")
+        .order("ticked_at", desc=True)
+        .limit(RESULTS_KEEP_LATEST)
+        .execute()
+    )
+    keep_ids = [row["id"] for row in keep_ids_res.data]
+    if not keep_ids:
+        return
+    _get_client().table("automation_results").delete().not_.in_("id", keep_ids).execute()
 
 
 def load_recent_results(limit=20):
