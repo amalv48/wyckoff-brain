@@ -118,6 +118,11 @@ def _is_missing_dedup_constraint(exc):
     return "42P10" in message or "no unique or exclusion constraint" in message
 
 
+def _is_missing_analysis_html_column(exc):
+    message = str(exc)
+    return "analysis_html" in message and ("does not exist" in message or "42703" in message)
+
+
 RESULTS_KEEP_LATEST = 10
 
 
@@ -148,6 +153,7 @@ def save_results(index_name, results_by_strategy):
                 "score": cand.get("score"),
                 "last_close": cand.get("last_close"),
                 "narrative_markdown": cand.get("analysis"),
+                "analysis_html": cand.get("analysis_html"),
                 **{k: plan.get(k) for k in PLAN_FIELDS},
             }
             rows.append(row)
@@ -159,7 +165,11 @@ def save_results(index_name, results_by_strategy):
         ).execute()
         _prune_excess_results()
     except Exception as e:
-        if not (_is_missing_results_table(e) or _is_missing_dedup_constraint(e)):
+        if not (
+            _is_missing_results_table(e)
+            or _is_missing_dedup_constraint(e)
+            or _is_missing_analysis_html_column(e)
+        ):
             raise
 
 

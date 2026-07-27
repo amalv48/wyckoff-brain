@@ -357,7 +357,13 @@
             </button>
             <div class="auto-result-detail" id="autoResultDetail${i}" hidden style="padding:0 22px 20px;">
               ${planHtml(plan)}
-              ${r.narrative_markdown ? `<div class="excerpt" style="padding:0;margin-top:6px;">${escapeHtml(r.narrative_markdown)}</div>` : ""}
+              ${
+                r.analysis_html
+                  ? `<div class="excerpt rendered-md" style="padding:0;margin-top:6px;">${r.analysis_html}</div>`
+                  : r.narrative_markdown
+                  ? `<div class="excerpt" style="padding:0;margin-top:6px;">${escapeHtml(r.narrative_markdown)}</div>`
+                  : ""
+              }
             </div>
           </div>`;
       })
