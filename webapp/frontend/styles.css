@@ -286,6 +286,18 @@ section.view.active { display: block; }
   cursor: pointer; padding: 0 3px; font-size: 15px; line-height: 1;
 }
 .removable-tag button:hover { color: var(--loss); }
+
+.auto-result-toggle {
+  width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  background: none; border: none; cursor: pointer; padding: 14px 22px; text-align: left;
+  font-family: inherit; color: inherit;
+}
+.auto-result-toggle:hover { background: var(--bg-sunken); }
+.auto-result-summary { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.auto-result-chevron {
+  font-family: ui-monospace, monospace; font-size: 11px; letter-spacing: 0.05em; text-transform: uppercase;
+  color: var(--accent); white-space: nowrap;
+}
 .position-fields { border-top: 1px dashed var(--border); padding-top: 14px; margin-top: 4px; }
 .position-heading { margin-bottom: 4px !important; }
 .position-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }

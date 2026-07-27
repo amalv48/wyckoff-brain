@@ -343,20 +343,36 @@
       return;
     }
     el.innerHTML = results
-      .map((r) => {
+      .map((r, i) => {
         const plan = { ...r, verdict: "SETUP" };
         return `
-          <div class="manual-result" style="margin-bottom:14px;">
-            <div style="display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:8px;margin-bottom:6px;">
-              <span class="mono" style="font-size:16px;font-weight:700;">${escapeHtml(r.ticker)}</span>
-              <span class="run-status">${escapeHtml(r.strategy)} · ${formatWib(r.ticked_at)} WIB · score ${escapeHtml(String(r.score ?? "—"))}</span>
+          <div class="manual-result auto-result-card" style="margin-bottom:10px;padding:0;overflow:hidden;">
+            <button type="button" class="auto-result-toggle" data-idx="${i}" aria-expanded="false">
+              <span class="auto-result-summary">
+                <span class="mono" style="font-size:15px;font-weight:700;">${escapeHtml(r.ticker)}</span>
+                ${actionBadgeHtml(r.action)}
+                <span class="run-status">${escapeHtml(r.strategy)} · ${formatWib(r.ticked_at)} WIB · score ${escapeHtml(String(r.score ?? "—"))}</span>
+              </span>
+              <span class="auto-result-chevron">Details ▾</span>
+            </button>
+            <div class="auto-result-detail" id="autoResultDetail${i}" hidden style="padding:0 22px 20px;">
+              ${planHtml(plan)}
+              ${r.narrative_markdown ? `<div class="excerpt" style="padding:0;margin-top:6px;">${escapeHtml(r.narrative_markdown)}</div>` : ""}
             </div>
-            ${planHtml(plan)}
-            ${r.narrative_markdown ? `<div class="excerpt" style="padding:0;margin-top:6px;">${escapeHtml(r.narrative_markdown)}</div>` : ""}
           </div>`;
       })
       .join("");
   }
+
+  $("autoResultsList").addEventListener("click", (e) => {
+    const btn = e.target.closest(".auto-result-toggle");
+    if (!btn) return;
+    const detail = $("autoResultDetail" + btn.dataset.idx);
+    const expanded = btn.getAttribute("aria-expanded") === "true";
+    btn.setAttribute("aria-expanded", String(!expanded));
+    detail.hidden = expanded;
+    btn.querySelector(".auto-result-chevron").textContent = expanded ? "Details ▾" : "Hide ▴";
+  });
 
   $("btnSaveAutomation").addEventListener("click", async () => {
     const btn = $("btnSaveAutomation");

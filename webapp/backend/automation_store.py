@@ -1,5 +1,5 @@
 import os
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from supabase import create_client
 
@@ -110,18 +110,39 @@ def _is_missing_results_table(exc):
     return "automation_results" in message and ("does not exist" in message or "42P01" in message)
 
 
+def _is_missing_dedup_constraint(exc):
+    # Raised by upsert(on_conflict=...) if migration 0006 (trade_date +
+    # its unique index) hasn't been applied yet — same "not ready" case as
+    # a missing table, just a different failure mode.
+    message = str(exc)
+    return "42P10" in message or "no unique or exclusion constraint" in message
+
+
+RESULTS_RETENTION_DAYS = 60
+JAKARTA_OFFSET = timedelta(hours=7)  # WIB, fixed offset, no DST
+
+
 def save_results(index_name, results_by_strategy):
     """Persist every SETUP candidate from one tick so the app can show them
     later, independent of whether the push notification / its CCR session
     is ever opened. results_by_strategy is {strategy: [candidate, ...]},
     already filtered to SETUP-only by the caller. No-ops silently if the
     migration hasn't been applied yet — a missing results table should
-    never break the tick itself."""
+    never break the tick itself.
+
+    Upserts on (ticker, strategy, trade_date) rather than always inserting:
+    the scheduler polls every few minutes and can legitimately re-detect
+    the same setup across multiple hour-slots in one day, which would
+    otherwise pile up near-duplicate rows for the same call. Each poll
+    that still sees the setup just refreshes that one row (latest score/
+    plan/narrative, latest ticked_at) instead of adding another."""
+    now = datetime.now(timezone.utc).isoformat()
     rows = []
     for strategy, candidates in results_by_strategy.items():
         for cand in candidates:
             plan = cand.get("plan") or {}
             row = {
+                "ticked_at": now,
                 "strategy": strategy,
                 "index_name": index_name,
                 "ticker": cand["ticker"],
@@ -134,10 +155,22 @@ def save_results(index_name, results_by_strategy):
     if not rows:
         return
     try:
-        _get_client().table("automation_results").insert(rows).execute()
+        _get_client().table("automation_results").upsert(
+            rows, on_conflict="ticker,strategy,trade_date"
+        ).execute()
+        _prune_old_results()
     except Exception as e:
-        if not _is_missing_results_table(e):
+        if not (_is_missing_results_table(e) or _is_missing_dedup_constraint(e)):
             raise
+
+
+def _prune_old_results():
+    """Keep the table bounded — automated setups older than the retention
+    window aren't useful as a 'recent setups' feed and would otherwise
+    grow forever. Runs after every save; cheap no-op most days since
+    there's rarely anything that old to delete."""
+    cutoff = ((datetime.now(timezone.utc) + JAKARTA_OFFSET).date() - timedelta(days=RESULTS_RETENTION_DAYS)).isoformat()
+    _get_client().table("automation_results").delete().lt("trade_date", cutoff).execute()
 
 
 def load_recent_results(limit=20):
