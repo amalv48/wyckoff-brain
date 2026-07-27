@@ -1,3 +1,4 @@
+import asyncio
 import base64
 import io
 import json
@@ -7,6 +8,7 @@ from pathlib import Path
 from typing import Optional
 
 import bleach
+import httpx
 import markdown as md_lib
 from dotenv import load_dotenv
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
@@ -488,6 +490,78 @@ def automation_tick():
 @app.get("/api/automation/results")
 def get_automation_results(limit: int = 20):
     return automation_store.load_recent_results(limit)
+
+
+# --- In-process automation scheduler ---
+#
+# This originally ran via an external CCR Routine hitting /api/automation/tick
+# hourly. That Routine fires inside a network-restricted dev environment that
+# blocks egress to arbitrary hosts, including this app's own production URL —
+# a reproducible policy block, not a transient failure — so it could never
+# actually reach this endpoint. Since this process already runs continuously
+# on Railway with real internet access, it drives itself instead: a
+# background task polls automation_tick() every few minutes.
+# automation_tick() already dedupes by hour-bucket internally (last_run_at),
+# so polling more often than the schedule actually fires is harmless — most
+# polls just return {"due": False} quickly. (This assumes a single running
+# instance, true for this project's scale; multiple replicas polling
+# concurrently could race past the dedup check and double-run a tick — not
+# a concern unless this app is ever scaled beyond one instance.)
+#
+# Notifications go to Telegram instead of the CCR PushNotification tool,
+# which only exists inside a live Claude Code session and can't be reached
+# from a plain server process. Set TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID
+# to enable; without them, ticks still run and results still land in
+# /api/automation/results, just without a push — same graceful-degradation
+# pattern as everything else in this file.
+
+AUTOMATION_POLL_SECONDS = 300
+
+
+def _format_setup_notification(results):
+    setups = [(strategy, c) for strategy, candidates in results.items() for c in candidates]
+    if not setups:
+        return None
+    strategy, c = setups[0]
+    plan = c.get("plan") or {}
+    headline = f"{c['ticker']} ({strategy}, {plan.get('action') or '?'}, entry {plan.get('entry_low')}-{plan.get('entry_high')})"
+    more = f" +{len(setups) - 1} more" if len(setups) > 1 else ""
+    plural = "s" if len(setups) != 1 else ""
+    return f"PITA: {len(setups)} setup{plural} - {headline}{more}. Open the app for details."
+
+
+def send_telegram_notification(text):
+    token = os.environ.get("TELEGRAM_BOT_TOKEN")
+    chat_id = os.environ.get("TELEGRAM_CHAT_ID")
+    if not token or not chat_id:
+        print(f"AUTOMATION: TELEGRAM_BOT_TOKEN/TELEGRAM_CHAT_ID not set, skipping notification: {text}")
+        return
+    try:
+        httpx.post(
+            f"https://api.telegram.org/bot{token}/sendMessage",
+            json={"chat_id": chat_id, "text": text},
+            timeout=10,
+        )
+    except Exception as e:
+        print(f"AUTOMATION: failed to send Telegram notification: {e}")
+
+
+async def _automation_scheduler_loop():
+    while True:
+        try:
+            result = await asyncio.to_thread(automation_tick)
+            if result.get("due"):
+                message = _format_setup_notification(result.get("results", {}))
+                if message:
+                    send_telegram_notification(message)
+        except Exception as e:
+            print(f"AUTOMATION: scheduler tick failed: {e}")
+        await asyncio.sleep(AUTOMATION_POLL_SECONDS)
+
+
+@app.on_event("startup")
+async def _start_automation_scheduler():
+    asyncio.create_task(_automation_scheduler_loop())
 
 
 # --- Manual chart analysis ---
