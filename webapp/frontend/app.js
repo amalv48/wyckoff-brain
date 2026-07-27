@@ -338,6 +338,7 @@
 
   function renderAutomationResults(results) {
     const el = $("autoResultsList");
+    state.lastAutomationResults = results || [];
     if (!results || !results.length) {
       el.innerHTML = `<div class="empty-state">No automated setups yet. They'll show up here once automation is enabled and finds one.</div>`;
       return;
@@ -364,20 +365,51 @@
                   ? `<div class="excerpt" style="padding:0;margin-top:6px;">${escapeHtml(r.narrative_markdown)}</div>`
                   : ""
               }
+              <div class="foot" style="padding:12px 0 0;">
+                <button class="btn-save" data-action="save-auto-result" data-idx="${i}">+ Journal</button>
+              </div>
             </div>
           </div>`;
       })
       .join("");
   }
 
-  $("autoResultsList").addEventListener("click", (e) => {
-    const btn = e.target.closest(".auto-result-toggle");
-    if (!btn) return;
-    const detail = $("autoResultDetail" + btn.dataset.idx);
-    const expanded = btn.getAttribute("aria-expanded") === "true";
-    btn.setAttribute("aria-expanded", String(!expanded));
-    detail.hidden = expanded;
-    btn.querySelector(".auto-result-chevron").textContent = expanded ? "Details ▾" : "Hide ▴";
+  $("autoResultsList").addEventListener("click", async (e) => {
+    const toggleBtn = e.target.closest(".auto-result-toggle");
+    if (toggleBtn) {
+      const detail = $("autoResultDetail" + toggleBtn.dataset.idx);
+      const expanded = toggleBtn.getAttribute("aria-expanded") === "true";
+      toggleBtn.setAttribute("aria-expanded", String(!expanded));
+      detail.hidden = expanded;
+      toggleBtn.querySelector(".auto-result-chevron").textContent = expanded ? "Details ▾" : "Hide ▴";
+      return;
+    }
+
+    const saveBtn = e.target.closest('[data-action="save-auto-result"]');
+    if (saveBtn) {
+      const r = state.lastAutomationResults[parseInt(saveBtn.dataset.idx, 10)];
+      if (!r) return;
+      saveBtn.disabled = true;
+      saveBtn.textContent = "Saving...";
+      try {
+        await fetch("/api/journal", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            ticker: r.ticker,
+            model: `${r.provider || "Automation"}/${r.model_id || "unknown"}`,
+            strategy: r.strategy,
+            analysis: r.narrative_markdown || "",
+          }),
+        });
+        state.journal = await fetch("/api/journal").then((res) => res.json());
+        renderJournal();
+        saveBtn.textContent = "Saved ✓";
+      } catch (err) {
+        saveBtn.textContent = "Failed";
+        saveBtn.disabled = false;
+      }
+    }
   });
 
   $("btnSaveAutomation").addEventListener("click", async () => {

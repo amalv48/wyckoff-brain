@@ -483,7 +483,7 @@ def automation_tick():
         ]
 
     automation_store.mark_ticked()
-    automation_store.save_results(settings["index_name"], results)
+    automation_store.save_results(settings["index_name"], settings["provider"], settings["model_id"], results)
     return {"due": True, "results": results}
 
 

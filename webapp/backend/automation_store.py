@@ -123,10 +123,15 @@ def _is_missing_analysis_html_column(exc):
     return "analysis_html" in message and ("does not exist" in message or "42703" in message)
 
 
+def _is_missing_model_columns(exc):
+    message = str(exc)
+    return ("provider" in message or "model_id" in message) and ("does not exist" in message or "42703" in message)
+
+
 RESULTS_KEEP_LATEST = 10
 
 
-def save_results(index_name, results_by_strategy):
+def save_results(index_name, provider, model_id, results_by_strategy):
     """Persist every SETUP candidate from one tick so the app can show them
     later, independent of whether the push notification / its CCR session
     is ever opened. results_by_strategy is {strategy: [candidate, ...]},
@@ -150,6 +155,8 @@ def save_results(index_name, results_by_strategy):
                 "strategy": strategy,
                 "index_name": index_name,
                 "ticker": cand["ticker"],
+                "provider": provider,
+                "model_id": model_id,
                 "score": cand.get("score"),
                 "last_close": cand.get("last_close"),
                 "narrative_markdown": cand.get("analysis"),
@@ -169,6 +176,7 @@ def save_results(index_name, results_by_strategy):
             _is_missing_results_table(e)
             or _is_missing_dedup_constraint(e)
             or _is_missing_analysis_html_column(e)
+            or _is_missing_model_columns(e)
         ):
             raise
 
