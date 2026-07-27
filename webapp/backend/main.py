@@ -508,10 +508,12 @@ def get_automation_results(limit: int = 20):
 # concurrently could race past the dedup check and double-run a tick — not
 # a concern unless this app is ever scaled beyond one instance.)
 #
-# Notifications go to Telegram instead of the CCR PushNotification tool,
-# which only exists inside a live Claude Code session and can't be reached
-# from a plain server process. Set TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID
-# to enable; without them, ticks still run and results still land in
+# Notifications go to Telegram and/or Slack instead of the CCR
+# PushNotification tool, which only exists inside a live Claude Code
+# session and can't be reached from a plain server process. Set
+# TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID and/or SLACK_WEBHOOK_URL to enable
+# either or both — whichever are configured fire, independently of each
+# other. Without any of them, ticks still run and results still land in
 # /api/automation/results, just without a push — same graceful-degradation
 # pattern as everything else in this file.
 
@@ -534,7 +536,7 @@ def send_telegram_notification(text):
     token = os.environ.get("TELEGRAM_BOT_TOKEN")
     chat_id = os.environ.get("TELEGRAM_CHAT_ID")
     if not token or not chat_id:
-        print(f"AUTOMATION: TELEGRAM_BOT_TOKEN/TELEGRAM_CHAT_ID not set, skipping notification: {text}")
+        print(f"AUTOMATION: TELEGRAM_BOT_TOKEN/TELEGRAM_CHAT_ID not set, skipping Telegram notification: {text}")
         return
     try:
         httpx.post(
@@ -546,6 +548,17 @@ def send_telegram_notification(text):
         print(f"AUTOMATION: failed to send Telegram notification: {e}")
 
 
+def send_slack_notification(text):
+    webhook_url = os.environ.get("SLACK_WEBHOOK_URL")
+    if not webhook_url:
+        print(f"AUTOMATION: SLACK_WEBHOOK_URL not set, skipping Slack notification: {text}")
+        return
+    try:
+        httpx.post(webhook_url, json={"text": text}, timeout=10)
+    except Exception as e:
+        print(f"AUTOMATION: failed to send Slack notification: {e}")
+
+
 async def _automation_scheduler_loop():
     while True:
         try:
@@ -554,6 +567,7 @@ async def _automation_scheduler_loop():
                 message = _format_setup_notification(result.get("results", {}))
                 if message:
                     send_telegram_notification(message)
+                    send_slack_notification(message)
         except Exception as e:
             print(f"AUTOMATION: scheduler tick failed: {e}")
         await asyncio.sleep(AUTOMATION_POLL_SECONDS)
