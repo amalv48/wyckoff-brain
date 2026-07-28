@@ -10,8 +10,8 @@ your laptop or anywhere with normal internet access.
 
 Go to [railway.app](https://railway.app), sign in with GitHub, click
 **New Project → Deploy from GitHub repo**, and pick `plummer48/wyckoff-brain`.
-If prompted for a branch, choose `claude/review-recommendations-lnukdf` (or
-whatever branch this ends up merged into).
+If prompted for a branch, choose `main` — that's the branch Railway watches
+for auto-deploys.
 
 ## 2. Confirm it found the Dockerfile
 
@@ -30,12 +30,25 @@ Service → **Variables** tab → add:
 | `GEMINI_API_KEY` | your Gemini key |
 | `SUPABASE_URL` | your Supabase project's API URL (Project Settings → API) |
 | `SUPABASE_SERVICE_ROLE_KEY` | the **service_role** secret key — not anon/publishable (same page, marked "secret") |
+| `TELEGRAM_BOT_TOKEN` (optional) | for automation push notifications — see README for setup |
+| `TELEGRAM_CHAT_ID` (optional) | for automation push notifications — see README for setup |
+| `SLACK_WEBHOOK_URL` (optional) | for automation push notifications — see README for setup |
 
 These are injected as environment variables at runtime — never baked into
 the image or committed to the repo. The journal now lives in Supabase
 (Postgres), not a local file, so no persistent volume is needed for it —
 if you attached one earlier for `journal.json`, it's safe to leave or
 remove, it's just unused now.
+
+## 3b. Apply the database migrations
+
+The Journal and Automation tabs need their tables to exist first. In the
+Supabase dashboard → **SQL Editor**, run every file in
+`supabase/migrations/` **in numeric order** (0002 through the highest
+number in that folder). Each is additive and safe to re-run
+(`if not exists` guards throughout) — see the README's migration table for
+what each one adds. Skipping one doesn't crash the app; it just shows a
+clear "run this migration" error on the affected feature until you catch up.
 
 ## 4. Deploy
 
@@ -51,9 +64,12 @@ Service → **Settings → Networking → Generate Domain**. Gives you a public
 
 ## 6. Test the screener
 
-Open the URL, go to the Screener tab, pick LQ45, run it. This is the one
-thing that's never been tested outside a network-restricted sandbox — report
-back what happens (success, or paste any error).
+Open the URL, go to the Screener tab, pick LQ45, run it — confirms Yahoo
+Finance and your AI provider key both actually work from Railway's network
+(this app's dev sandbox can't reach either, so this is the first real
+end-to-end test). If you set up automation, also check the Automation tab
+loads without a "Settings unavailable" error — that confirms Supabase is
+wired up correctly too.
 
 ## Redeploying after code changes
 

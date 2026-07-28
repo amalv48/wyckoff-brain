@@ -52,10 +52,21 @@ fly secrets set \
 ```
 
 Use the **service_role** secret key from Supabase (Project Settings → API),
-not the anon/publishable one — the journal table's RLS has no
-anon/authenticated policies, so only service_role can read or write it.
-These become environment variables inside the container — never baked into
-the image or committed to the repo.
+not the anon/publishable one — every table's RLS has no anon/authenticated
+policies, so only service_role can read or write them. These become
+environment variables inside the container — never baked into the image or
+committed to the repo.
+
+Optionally, also set `TELEGRAM_BOT_TOKEN` / `TELEGRAM_CHAT_ID` and/or
+`SLACK_WEBHOOK_URL` for automation push notifications — see the README for
+how to obtain each.
+
+## 4b. Apply the database migrations
+
+Before the Journal/Automation tabs will work, run every file in
+`supabase/migrations/` **in numeric order** via the Supabase dashboard's SQL
+Editor — see the README's migration table for what each one adds. The app
+degrades gracefully (clear error, no crash) if you're missing one.
 
 ## 5. Deploy
 
