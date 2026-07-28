@@ -336,6 +336,13 @@
     return `${wib.getUTCFullYear()}-${pad(wib.getUTCMonth() + 1)}-${pad(wib.getUTCDate())} ${pad(wib.getUTCHours())}:${pad(wib.getUTCMinutes())}`;
   }
 
+  function formatAutoScore(r) {
+    if (r.score == null) return "—";
+    // max_score wasn't recorded for rows saved before that column existed —
+    // fall back to a bare number for those rather than showing "4/null".
+    return r.max_score != null ? `${r.score}/${r.max_score}` : String(r.score);
+  }
+
   function renderAutomationResults(results) {
     const el = $("autoResultsList");
     state.lastAutomationResults = results || [];
@@ -352,7 +359,7 @@
               <span class="auto-result-summary">
                 <span class="mono" style="font-size:15px;font-weight:700;">${escapeHtml(r.ticker)}</span>
                 ${actionBadgeHtml(r.action)}
-                <span class="run-status">${escapeHtml(r.strategy)} · ${formatWib(r.ticked_at)} WIB · score ${escapeHtml(String(r.score ?? "—"))}</span>
+                <span class="run-status">${escapeHtml(r.strategy)} · ${formatWib(r.ticked_at)} WIB · score ${escapeHtml(formatAutoScore(r))}</span>
               </span>
               <span class="auto-result-chevron">Details ▾</span>
             </button>

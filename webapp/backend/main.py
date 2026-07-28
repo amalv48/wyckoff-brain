@@ -478,7 +478,8 @@ def automation_tick():
             settings["equity"],
         )
         results[strategy] = [
-            c for c in screen_result["candidates"]
+            {**c, "max_score": screen_result["max_score"]}
+            for c in screen_result["candidates"]
             if c.get("plan") is not None and c["plan"].get("verdict") == "SETUP"
         ]
 

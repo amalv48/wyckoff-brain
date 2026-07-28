@@ -128,6 +128,11 @@ def _is_missing_model_columns(exc):
     return ("provider" in message or "model_id" in message) and ("does not exist" in message or "42703" in message)
 
 
+def _is_missing_max_score_column(exc):
+    message = str(exc)
+    return "max_score" in message and ("does not exist" in message or "42703" in message)
+
+
 RESULTS_KEEP_LATEST = 10
 
 
@@ -160,6 +165,7 @@ def save_results(index_name, provider, model_id, results_by_strategy):
                 "provider": provider,
                 "model_id": model_id,
                 "score": cand.get("score"),
+                "max_score": cand.get("max_score"),
                 "last_close": cand.get("last_close"),
                 "narrative_markdown": cand.get("analysis"),
                 "analysis_html": cand.get("analysis_html"),
@@ -179,6 +185,7 @@ def save_results(index_name, provider, model_id, results_by_strategy):
             or _is_missing_dedup_constraint(e)
             or _is_missing_analysis_html_column(e)
             or _is_missing_model_columns(e)
+            or _is_missing_max_score_column(e)
         ):
             raise
 
