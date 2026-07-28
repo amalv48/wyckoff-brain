@@ -13,3 +13,4 @@ bleach
 supabase
 tzdata
 httpx
+holidays

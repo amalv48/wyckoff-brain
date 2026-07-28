@@ -343,6 +343,24 @@
     return r.max_score != null ? `${r.score}/${r.max_score}` : String(r.score);
   }
 
+  function outcomeBadgeHtml(outcome) {
+    if (outcome === "target_hit") return `<span class="verdict setup">TARGET HIT</span>`;
+    if (outcome === "stop_hit") return `<span class="verdict action-sell">STOP HIT</span>`;
+    return `<span class="verdict no-setup">OPEN</span>`;
+  }
+
+  function trackRecordSummaryHtml(results) {
+    const wins = results.filter((r) => r.outcome === "target_hit").length;
+    const losses = results.filter((r) => r.outcome === "stop_hit").length;
+    const resolved = wins + losses;
+    const open = results.length - resolved;
+    if (!resolved) {
+      return `<p class="field-hint" style="margin:0 0 14px;">${open} still open, none resolved yet — checked once a day against target/stop.</p>`;
+    }
+    const winRate = Math.round((wins / resolved) * 100);
+    return `<p class="field-hint" style="margin:0 0 14px;">Track record: ${winRate}% win rate (${wins} target hit, ${losses} stop hit) · ${open} still open</p>`;
+  }
+
   function renderAutomationResults(results) {
     const el = $("autoResultsList");
     state.lastAutomationResults = results || [];
@@ -350,7 +368,9 @@
       el.innerHTML = `<div class="empty-state">No automated setups yet. They'll show up here once automation is enabled and finds one.</div>`;
       return;
     }
-    el.innerHTML = results
+    el.innerHTML =
+      trackRecordSummaryHtml(results) +
+      results
       .map((r, i) => {
         const plan = { ...r, verdict: "SETUP" };
         return `
@@ -359,6 +379,7 @@
               <span class="auto-result-summary">
                 <span class="mono" style="font-size:15px;font-weight:700;">${escapeHtml(r.ticker)}</span>
                 ${actionBadgeHtml(r.action)}
+                ${outcomeBadgeHtml(r.outcome)}
                 <span class="run-status">${escapeHtml(r.strategy)} · ${formatWib(r.ticked_at)} WIB · score ${escapeHtml(formatAutoScore(r))}</span>
               </span>
               <span class="auto-result-chevron">Details ▾</span>

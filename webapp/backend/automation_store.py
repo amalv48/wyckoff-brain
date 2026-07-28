@@ -133,6 +133,11 @@ def _is_missing_max_score_column(exc):
     return "max_score" in message and ("does not exist" in message or "42703" in message)
 
 
+def _is_missing_outcome_column(exc):
+    message = str(exc)
+    return "outcome" in message and ("does not exist" in message or "42703" in message)
+
+
 RESULTS_KEEP_LATEST = 10
 
 
@@ -169,6 +174,16 @@ def save_results(index_name, provider, model_id, results_by_strategy):
                 "last_close": cand.get("last_close"),
                 "narrative_markdown": cand.get("analysis"),
                 "analysis_html": cand.get("analysis_html"),
+                # A re-detection is a fresh call, not a continuation of the
+                # old one — reset any prior resolution even if this
+                # (ticker, strategy) had already resolved target/stop hit
+                # before. Must be explicit: upsert leaves columns absent
+                # from the payload untouched, so without this a resolved
+                # row would stay "resolved" forever even after a brand new
+                # signal overwrites its entry/stop/target.
+                "outcome": "open",
+                "outcome_at": None,
+                "outcome_price": None,
                 **{k: plan.get(k) for k in PLAN_FIELDS},
             }
             rows.append(row)
@@ -186,20 +201,27 @@ def save_results(index_name, provider, model_id, results_by_strategy):
             or _is_missing_analysis_html_column(e)
             or _is_missing_model_columns(e)
             or _is_missing_max_score_column(e)
+            or _is_missing_outcome_column(e)
         ):
             raise
 
 
 def _prune_excess_results():
-    """Keep only the RESULTS_KEEP_LATEST most recent rows. Count-based
+    """Keep only the RESULTS_KEEP_LATEST most recent OPEN rows. Count-based
     rather than time-based: this only notifies on actual SETUP verdicts,
     so quiet market stretches are normal and a fixed time window would
     make the list look empty/broken during them instead of just being
-    selective. Runs after every save; cheap no-op once under the cap."""
+    selective. Runs after every save; cheap no-op once under the cap.
+
+    Scoped to outcome='open' only — resolved rows (target_hit/stop_hit)
+    are the track record this is meant to build and must never be pruned
+    here, or "keep the latest 10" would silently erase win/loss history
+    every time new setups came in."""
     keep_ids_res = (
         _get_client()
         .table("automation_results")
         .select("id")
+        .eq("outcome", "open")
         .order("ticked_at", desc=True)
         .limit(RESULTS_KEEP_LATEST)
         .execute()
@@ -207,7 +229,38 @@ def _prune_excess_results():
     keep_ids = [row["id"] for row in keep_ids_res.data]
     if not keep_ids:
         return
-    _get_client().table("automation_results").delete().not_.in_("id", keep_ids).execute()
+    _get_client().table("automation_results").delete().eq("outcome", "open").not_.in_("id", keep_ids).execute()
+
+
+def load_open_results():
+    """Rows still awaiting a target/stop resolution. Returns an empty list
+    if the migration hasn't been applied yet — outcome tracking just stays
+    inert rather than crashing the daily check."""
+    try:
+        res = (
+            _get_client()
+            .table("automation_results")
+            .select("*")
+            .eq("outcome", "open")
+            .execute()
+        )
+    except Exception as e:
+        if _is_missing_results_table(e) or _is_missing_outcome_column(e):
+            return []
+        raise
+    return res.data
+
+
+def resolve_outcome(row_id, outcome, outcome_price):
+    """Record that a setup's plan was validated (target_hit) or
+    invalidated (stop_hit) by price action since it was detected."""
+    _get_client().table("automation_results").update(
+        {
+            "outcome": outcome,
+            "outcome_at": datetime.now(timezone.utc).isoformat(),
+            "outcome_price": outcome_price,
+        }
+    ).eq("id", row_id).execute()
 
 
 def load_recent_results(limit=20):

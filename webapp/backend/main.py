@@ -1,5 +1,6 @@
 import asyncio
 import base64
+import functools
 import io
 import json
 import os
@@ -8,6 +9,7 @@ from pathlib import Path
 from typing import Optional
 
 import bleach
+import holidays
 import httpx
 import markdown as md_lib
 from dotenv import load_dotenv
@@ -431,6 +433,17 @@ def put_automation_settings(req: AutomationSettings):
         raise HTTPException(503, str(e))
 
 
+@functools.lru_cache(maxsize=4)
+def _id_public_holidays(year):
+    """Indonesian national public holidays for the given year, via the
+    `holidays` package (real, maintained data — not hand-typed dates).
+    Note: this covers national public holidays only. IDX occasionally
+    adds extra "cuti bersama" (collective leave) non-trading days that
+    aren't public holidays and aren't in this dataset — a known gap, not
+    something guessable without IDX's own official trading calendar."""
+    return holidays.Indonesia(years=year)
+
+
 @app.post("/api/automation/tick")
 def automation_tick():
     """Called hourly by the CCR Routine. Reports {"due": false} with no
@@ -449,11 +462,15 @@ def automation_tick():
     now_utc = datetime.now(timezone.utc)
     wib_hour = (now_utc.hour + 7) % 24
     # WIB is UTC+7 with no date rollover risk here: the active hour-slots
-    # (07:00-16:00 WIB) never cross midnight, so deriving the weekday from
-    # WIB-shifted time is safe and always matches the WIB calendar day.
-    wib_weekday = (now_utc + timedelta(hours=7)).weekday()  # Monday=0
+    # (07:00-16:00 WIB) never cross midnight, so deriving the weekday/date
+    # from WIB-shifted time is safe and always matches the WIB calendar day.
+    wib_now = now_utc + timedelta(hours=7)
+    wib_weekday = wib_now.weekday()  # Monday=0
+    wib_date = wib_now.date()
     hour_bucket = now_utc.replace(minute=0, second=0, microsecond=0)
     if wib_weekday not in settings["days_wib"]:
+        return {"due": False}
+    if wib_date in _id_public_holidays(wib_date.year):
         return {"due": False}
     if wib_hour not in settings["hours_wib"]:
         return {"due": False}
@@ -560,7 +577,60 @@ def send_slack_notification(text):
         print(f"AUTOMATION: failed to send Slack notification: {e}")
 
 
+# --- Closing the plan-vs-actual loop ---
+#
+# A saved setup has a target and a stop but nothing ever checked whether
+# price action afterward actually validated the call. Once a day, every
+# still-open result gets checked against daily OHLCV since it was
+# detected: if the daily High ever reached target, that's a win; if the
+# daily Low ever reached the stop, that's a loss. This is a directional
+# read (did the plan get validated), not a full trade simulation — it
+# doesn't account for a specific hypothetical entry fill or intraday
+# ordering when both target and stop fall in the same day's range (that
+# case is treated as the stop, the conservative assumption since daily
+# bars can't say which was actually touched first).
+
+
+def _resolve_setup_outcome(df, trade_date, target, stop_loss):
+    df_since = df[df.index.date >= trade_date]
+    for _, bar in df_since.iterrows():
+        hit_target = bar["High"] >= target
+        hit_stop = bar["Low"] <= stop_loss
+        if hit_stop:
+            return "stop_hit", float(bar["Low"])
+        if hit_target:
+            return "target_hit", float(bar["High"])
+    return "open", None
+
+
+def update_automation_outcomes():
+    open_rows = automation_store.load_open_results()
+    if not open_rows:
+        return
+    tickers = sorted({row["ticker"] for row in open_rows})
+    data = screener.fetch_ohlcv(tickers)
+    for row in open_rows:
+        df = data.get(row["ticker"])
+        target = row.get("target")
+        stop_loss = row.get("stop_loss")
+        trade_date_raw = row.get("trade_date")
+        if df is None or target is None or stop_loss is None or not trade_date_raw:
+            continue
+        trade_date = (
+            trade_date_raw
+            if hasattr(trade_date_raw, "year")
+            else datetime.strptime(trade_date_raw, "%Y-%m-%d").date()
+        )
+        outcome, price = _resolve_setup_outcome(df, trade_date, float(target), float(stop_loss))
+        if outcome != "open":
+            automation_store.resolve_outcome(row["id"], outcome, price)
+
+
+_last_outcome_check_date = None
+
+
 async def _automation_scheduler_loop():
+    global _last_outcome_check_date
     while True:
         try:
             result = await asyncio.to_thread(automation_tick)
@@ -571,6 +641,15 @@ async def _automation_scheduler_loop():
                     send_slack_notification(message)
         except Exception as e:
             print(f"AUTOMATION: scheduler tick failed: {e}")
+
+        try:
+            today_wib = (datetime.now(timezone.utc) + timedelta(hours=7)).date()
+            if today_wib != _last_outcome_check_date:
+                await asyncio.to_thread(update_automation_outcomes)
+                _last_outcome_check_date = today_wib
+        except Exception as e:
+            print(f"AUTOMATION: outcome check failed: {e}")
+
         await asyncio.sleep(AUTOMATION_POLL_SECONDS)
 
 
