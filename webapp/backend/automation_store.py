@@ -111,9 +111,9 @@ def _is_missing_results_table(exc):
 
 
 def _is_missing_dedup_constraint(exc):
-    # Raised by upsert(on_conflict=...) if migration 0006 (trade_date +
-    # its unique index) hasn't been applied yet — same "not ready" case as
-    # a missing table, just a different failure mode.
+    # Raised by upsert(on_conflict=...) if migration 0009 (the unique index
+    # on ticker+strategy) hasn't been applied yet — same "not ready" case
+    # as a missing table, just a different failure mode.
     message = str(exc)
     return "42P10" in message or "no unique or exclusion constraint" in message
 
@@ -139,12 +139,14 @@ def save_results(index_name, provider, model_id, results_by_strategy):
     migration hasn't been applied yet — a missing results table should
     never break the tick itself.
 
-    Upserts on (ticker, strategy, trade_date) rather than always inserting:
-    the scheduler polls every few minutes and can legitimately re-detect
-    the same setup across multiple hour-slots in one day, which would
-    otherwise pile up near-duplicate rows for the same call. Each poll
-    that still sees the setup just refreshes that one row (latest score/
-    plan/narrative, latest ticked_at) instead of adding another."""
+    Upserts on (ticker, strategy) — not scoped to any particular day —
+    so re-detecting the same setup, whether five minutes later or five
+    days later, refreshes the single existing row (latest score/plan/
+    narrative/ticked_at/index/provider/model) instead of adding another.
+    A different strategy for the same ticker is a separate row; a
+    different index or provider/model for the same (ticker, strategy)
+    still counts as the same setup and just updates it — "keep the latest
+    run" applies regardless of what changed about how it was produced."""
     now = datetime.now(timezone.utc).isoformat()
     rows = []
     for strategy, candidates in results_by_strategy.items():
@@ -168,7 +170,7 @@ def save_results(index_name, provider, model_id, results_by_strategy):
         return
     try:
         _get_client().table("automation_results").upsert(
-            rows, on_conflict="ticker,strategy,trade_date"
+            rows, on_conflict="ticker,strategy"
         ).execute()
         _prune_excess_results()
     except Exception as e:
