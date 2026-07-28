@@ -633,17 +633,9 @@ async def analyze_manual(
     except Exception as e:
         raise HTTPException(502, f"Analysis failed: {e}")
 
-    entry = {
-        "model": f"{provider}/{model_id}",
-        "strategy": prompt,
-        "ticker": ticker or None,
-        "analysis": analysis,
-    }
-    saved = journal_store.append(entry)
     return {
         "analysis": analysis,
         "analysis_html": render_markdown(analysis),
-        "journal_id": saved["id"],
         "plan": plan,
         "position_pnl": position_pnl,
     }

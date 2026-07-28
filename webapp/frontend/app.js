@@ -726,16 +726,44 @@
         throw new Error(err.detail || res.statusText);
       }
       const data = await res.json();
+      state.lastManualResult = {
+        ticker: ticker || null,
+        model: `${$("selProviderM").value}/${$("selModelM").value}`,
+        strategy: $("selPromptM").value,
+        analysis: data.analysis,
+      };
       $("manualResultWrap").style.display = "block";
-      $("manualResult").innerHTML = positionHtml(data.position_pnl) + planHtml(data.plan) + data.analysis_html;
-      state.journal = await fetch("/api/journal").then((r) => r.json());
-      renderJournal();
+      $("manualResult").innerHTML =
+        positionHtml(data.position_pnl) +
+        planHtml(data.plan) +
+        data.analysis_html +
+        `<div class="foot" style="padding-top:14px;"><button class="btn-save" data-action="save-manual-result">+ Journal</button></div>`;
     } catch (e) {
       $("manualResultWrap").style.display = "block";
       $("manualResult").textContent = "Analysis failed: " + e.message;
     } finally {
       btn.disabled = false;
       btn.textContent = "🚀 Run Analysis";
+    }
+  });
+
+  $("manualResult").addEventListener("click", async (e) => {
+    const saveBtn = e.target.closest('[data-action="save-manual-result"]');
+    if (!saveBtn || !state.lastManualResult) return;
+    saveBtn.disabled = true;
+    saveBtn.textContent = "Saving...";
+    try {
+      await fetch("/api/journal", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(state.lastManualResult),
+      });
+      state.journal = await fetch("/api/journal").then((r) => r.json());
+      renderJournal();
+      saveBtn.textContent = "Saved ✓";
+    } catch (err) {
+      saveBtn.textContent = "Failed";
+      saveBtn.disabled = false;
     }
   });
 
