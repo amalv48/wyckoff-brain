@@ -349,6 +349,21 @@
     return `<span class="verdict no-setup">OPEN</span>`;
   }
 
+  // Live price vs. the plan's worst-case entry (entry_high — the bound every
+  // strategy sizes risk from). Absent when the price fetch failed: better to
+  // show nothing than a stale number next to a trading plan.
+  function currentPriceHtml(r) {
+    if (r.current_price == null) return "";
+    const entry = r.entry_high;
+    let delta = "";
+    if (entry != null && entry > 0) {
+      const pct = ((r.current_price - entry) / entry) * 100;
+      const cls = pct >= 0 ? "gain" : "loss";
+      delta = ` <span class="${cls}">(${pct >= 0 ? "+" : ""}${pct.toFixed(1)}% vs entry)</span>`;
+    }
+    return `<span class="run-status">now ${Number(r.current_price).toLocaleString("id-ID")}${delta}</span>`;
+  }
+
   function trackRecordSummaryHtml(results) {
     const wins = results.filter((r) => r.outcome === "target_hit").length;
     const losses = results.filter((r) => r.outcome === "stop_hit").length;
@@ -380,6 +395,7 @@
                 <span class="mono" style="font-size:15px;font-weight:700;">${escapeHtml(r.ticker)}</span>
                 ${actionBadgeHtml(r.action)}
                 ${outcomeBadgeHtml(r.outcome)}
+                ${currentPriceHtml(r)}
                 <span class="run-status">${escapeHtml(r.strategy)} · ${formatWib(r.ticked_at)} WIB · score ${escapeHtml(formatAutoScore(r))}</span>
               </span>
               <span class="auto-result-chevron">Details ▾</span>

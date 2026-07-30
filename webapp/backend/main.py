@@ -507,7 +507,25 @@ def automation_tick():
 
 @app.get("/api/automation/results")
 def get_automation_results(limit: int = 20):
-    return automation_store.load_recent_results(limit)
+    """Saved setups, each annotated with the stock's current price so you can
+    see where it sits now versus a plan drawn up earlier (last_close is the
+    price at detection time, which goes stale immediately).
+
+    current_price is fetched live rather than stored: a persisted "current"
+    price would be a contradiction, only as fresh as the last write. If the
+    fetch fails the field is simply absent and the UI shows nothing for it —
+    a stale or wrong price next to a trading plan is worse than none."""
+    rows = automation_store.load_recent_results(limit)
+    if not rows:
+        return rows
+    try:
+        prices = screener.fetch_last_prices(sorted({row["ticker"] for row in rows}))
+    except Exception as e:
+        print(f"AUTOMATION: current-price fetch failed, omitting: {e}")
+        return rows
+    for row in rows:
+        row["current_price"] = prices.get(row["ticker"])
+    return rows
 
 
 # --- In-process automation scheduler ---

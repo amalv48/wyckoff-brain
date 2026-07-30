@@ -40,6 +40,26 @@ def fetch_ohlcv(tickers, period="6mo"):
     return data
 
 
+def fetch_last_prices(tickers, period="5d"):
+    """Latest close per ticker, for showing where a stock sits *now* versus a
+    plan that was drawn up earlier. Deliberately not fetch_ohlcv(): that one
+    drops any ticker with fewer than 25 bars (it needs the history for
+    scoring), which would discard everything on a short period. This only
+    needs the most recent bar, so a few days is enough and much faster.
+    Missing/failed tickers are simply absent from the result — callers show
+    nothing rather than a wrong number."""
+    prices = {}
+    for code in tickers:
+        try:
+            df = yf.Ticker(_jk_ticker(code)).history(period=period)
+        except Exception:
+            continue
+        if df is None or df.empty:
+            continue
+        prices[code] = round(float(df["Close"].iloc[-1]), 2)
+    return prices
+
+
 def fetch_index_reference(period="6mo"):
     """Fetch IHSG (Jakarta Composite Index) history, used as a relative-strength
     benchmark. Returns None on failure so callers can degrade gracefully."""
